@@ -46,7 +46,7 @@
         "updatedAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
       },
-      "required": ["clientName", "phoneNumber", "assignee", "version", "estimateStatus", "products"]
+      "required": ["version", "estimateStatus", "products"]
     }
   },
   "firestore": {

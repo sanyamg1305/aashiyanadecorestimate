@@ -345,18 +345,14 @@ function AppContent() {
   // --- Actions ---
   const saveEstimate = async () => {
     if (!user) return;
-    if (!clientName || !phoneNumber || !assignee) {
-      alert('Please fill in Client Name, Phone, and Assignee');
-      return;
-    }
 
     setIsSaving(true);
-    const estimateData: Partial<Estimate> = {
-      clientName,
-      phoneNumber,
-      siteAddress,
-      architectName,
-      assignee,
+    const estimateData: any = {
+      clientName: clientName || '',
+      phoneNumber: phoneNumber || '',
+      siteAddress: siteAddress || '',
+      architectName: architectName || '',
+      assignee: assignee || '',
       estimateStatus,
       paymentMode,
       paymentStatus,
@@ -368,9 +364,9 @@ function AppContent() {
       products,
       remarks: estimateRemarks,
       updatedAt: serverTimestamp(),
-      orderDate: estimateStatus === 'Order Confirmed' ? (orderDate || new Date().toISOString()) : undefined,
-      expectedDeliveryDate: expectedDeliveryDate || undefined,
-      deliveryStatus: deliveryStatus || undefined,
+      orderDate: estimateStatus === 'Order Confirmed' ? (orderDate || new Date().toISOString()) : null,
+      expectedDeliveryDate: expectedDeliveryDate || null,
+      deliveryStatus: deliveryStatus || 'Preparing Order',
       isFinalOrder: isFinalOrder || false,
     };
 
@@ -394,6 +390,8 @@ function AppContent() {
       setSelectedEstimateId(estimateId!);
       setView('estimate_detail');
     } catch (error) {
+      console.error('Save error:', error);
+      alert('Failed to save estimate. Please check your connection and try again.');
       handleFirestoreError(error, OperationType.WRITE, 'estimates');
     } finally {
       setIsSaving(false);
