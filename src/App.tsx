@@ -44,7 +44,6 @@ import {
 } from 'firebase/auth';
 import { db, auth } from './firebase';
 import { 
-  Lead, 
   Estimate, 
   TileProduct, 
   EstimateStatus, 
@@ -52,11 +51,9 @@ import {
   PaymentStatus,
   ASSIGNEES, 
   PAYMENT_MODES, 
-  TILE_SIZES, 
   ESTIMATE_STATUS_CONFIG,
   DELIVERY_STATUS_OPTIONS,
-  PAYMENT_STATUS_OPTIONS,
-  LeadActivity
+  PAYMENT_STATUS_OPTIONS
 } from './types';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -209,27 +206,21 @@ export default function App() {
 function AppContent() {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'dashboard' | 'lead_detail' | 'estimate_detail' | 'lead_form' | 'estimate_form'>('dashboard');
-  const [leads, setLeads] = useState<Lead[]>([]);
+  const [view, setView] = useState<'dashboard' | 'estimate_detail' | 'estimate_form'>('dashboard');
   const [estimates, setEstimates] = useState<Estimate[]>([]);
-  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
   const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Lead Form State
-  const [currentLeadId, setCurrentLeadId] = useState<string | null>(null);
-  const [assignee, setAssignee] = useState('');
+  // Estimate Form State (Includes Client Info)
+  const [currentEstimateId, setCurrentEstimateId] = useState<string | null>(null);
   const [clientName, setClientName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [siteAddress, setSiteAddress] = useState('');
   const [architectName, setArchitectName] = useState('');
-  const [leadRemarks, setLeadRemarks] = useState('');
-
-  // Estimate Form State
-  const [currentEstimateId, setCurrentEstimateId] = useState<string | null>(null);
+  const [assignee, setAssignee] = useState('');
   const [estimateStatus, setEstimateStatus] = useState<EstimateStatus>('Draft');
   const [paymentMode, setPaymentMode] = useState('');
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>('Not Paid');
@@ -305,8 +296,15 @@ function AppContent() {
       if (p.id === id) {
         const updated = { ...p, ...updates };
         
-        // Auto-calculate logic
-        if ('sqFtRequired' in updates || 'sqFtPerBox' in updates || 'pricePerSqFt' in updates) {
+        // Auto-calculate sqFtPerBox if dimensions or unit or tilesPerBox changes
+        if ('length' in updates || 'width' in updates || 'unit' in updates || 'tilesPerBox' in updates) {
+          const area = (updated.length || 0) * (updated.width || 0);
+          const totalArea = area * (updated.tilesPerBox || 0);
+          updated.sqFtPerBox = updated.unit === 'inch' ? totalArea / 144 : totalArea;
+        }
+
+        // Auto-calculate logic for boxes and price
+        if ('sqFtRequired' in updates || 'sqFtPerBox' in updates || 'pricePerSqFt' in updates || 'length' in updates || 'width' in updates || 'unit' in updates || 'tilesPerBox' in updates) {
           const sqFt = updated.sqFtRequired || 0;
           const perBox = updated.sqFtPerBox || 1;
           const price = updated.pricePerSqFt || 0;
@@ -325,7 +323,10 @@ function AppContent() {
     setProducts([...products, {
       id: Math.random().toString(36).substr(2, 9),
       tileName: '',
-      tileSize: '',
+      length: 0,
+      width: 0,
+      unit: 'inch',
+      tilesPerBox: 0,
       pricePerSqFt: 0,
       sqFtRequired: 0,
       sqFtPerBox: 0,
@@ -342,7 +343,7 @@ function AppContent() {
   };
 
   // --- Actions ---
-  const saveLead = async () => {
+  const saveEstimate = async () => {
     if (!user) return;
     if (!clientName || !phoneNumber || !assignee) {
       alert('Please fill in Client Name, Phone, and Assignee');
@@ -350,51 +351,12 @@ function AppContent() {
     }
 
     setIsSaving(true);
-    const leadData: Partial<Lead> = {
+    const estimateData: Partial<Estimate> = {
       clientName,
       phoneNumber,
-      assignee,
       siteAddress,
       architectName,
-      remarks: leadRemarks,
-      updatedAt: serverTimestamp(),
-    };
-
-    if (!currentLeadId) {
-      leadData.createdAt = serverTimestamp();
-      leadData.createdBy = user.uid;
-      leadData.activities = [{
-        id: Math.random().toString(36).substr(2, 9),
-        type: 'system',
-        message: 'Lead created',
-        timestamp: new Date().toISOString(),
-        userName: user.displayName || user.email || 'Unknown',
-        userId: user.uid
-      }];
-    }
-
-    try {
-      let leadId = currentLeadId;
-      if (currentLeadId) {
-        await updateDoc(doc(db, 'leads', currentLeadId), leadData);
-      } else {
-        const docRef = await addDoc(collection(db, 'leads'), leadData);
-        leadId = docRef.id;
-      }
-      return leadId;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'leads');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const saveEstimate = async (leadId: string) => {
-    if (!user || !leadId) return;
-
-    setIsSaving(true);
-    const estimateData: Partial<Estimate> = {
-      leadId,
+      assignee,
       estimateStatus,
       paymentMode,
       paymentStatus,
@@ -414,37 +376,23 @@ function AppContent() {
 
     if (!currentEstimateId) {
       estimateData.createdAt = serverTimestamp();
-      estimateData.version = (estimates.filter(e => e.leadId === leadId).length || 0) + 1;
+      estimateData.createdBy = user.uid;
+      estimateData.version = 1;
     }
 
     try {
+      let estimateId = currentEstimateId;
       if (currentEstimateId) {
         await updateDoc(doc(db, 'estimates', currentEstimateId), estimateData);
       } else {
-        await addDoc(collection(db, 'estimates'), estimateData);
+        const docRef = await addDoc(collection(db, 'estimates'), estimateData);
+        estimateId = docRef.id;
       }
       
-      // Add activity to lead
-      const lead = leads.find(l => l.id === leadId);
-      if (lead) {
-        const newActivity: LeadActivity = {
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'system',
-          message: currentEstimateId ? `Estimate updated (v${estimateData.version})` : `New estimate created (v${estimateData.version})`,
-          timestamp: new Date().toISOString(),
-          userName: user.displayName || user.email || 'Unknown',
-          userId: user.uid
-        };
-        await updateDoc(doc(db, 'leads', leadId), {
-          activities: [...(lead.activities || []), newActivity],
-          updatedAt: serverTimestamp()
-        });
-      }
-
       alert('Estimate saved successfully!');
       resetForm();
-      setSelectedLeadId(leadId);
-      setView('lead_detail');
+      setSelectedEstimateId(estimateId!);
+      setView('estimate_detail');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'estimates');
     } finally {
@@ -453,14 +401,12 @@ function AppContent() {
   };
 
   const resetForm = () => {
-    setCurrentLeadId(null);
     setCurrentEstimateId(null);
     setAssignee('');
     setClientName('');
     setPhoneNumber('');
     setSiteAddress('');
     setArchitectName('');
-    setLeadRemarks('');
     
     setEstimateStatus('Draft');
     setPaymentMode('');
@@ -489,12 +435,11 @@ function AppContent() {
     if (!user) return;
     
     setIsSaving(true);
-    const newVersion = (estimates.filter(e => e.leadId === estimate.leadId).length || 0) + 1;
     
     const newEstimate: Partial<Estimate> = {
       ...estimate,
       id: undefined,
-      version: newVersion,
+      version: (estimate.version || 1) + 1,
       estimateStatus: 'Draft',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -506,23 +451,6 @@ function AppContent() {
 
     try {
       await addDoc(collection(db, 'estimates'), newEstimate);
-      
-      // Add activity to lead
-      const lead = leads.find(l => l.id === estimate.leadId);
-      if (lead) {
-        const newActivity: LeadActivity = {
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'system',
-          message: `Estimate duplicated (v${estimate.version} -> v${newVersion})`,
-          timestamp: new Date().toISOString(),
-          userName: user.displayName || user.email || 'Unknown',
-          userId: user.uid
-        };
-        await updateDoc(doc(db, 'leads', estimate.leadId), {
-          activities: [...(lead.activities || []), newActivity],
-          updatedAt: serverTimestamp()
-        });
-      }
       alert('Estimate duplicated as Draft!');
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, 'estimates');
@@ -541,66 +469,9 @@ function AppContent() {
         updatedAt: serverTimestamp(),
         orderDate: newStatus === 'Order Confirmed' ? new Date().toISOString() : estimate.orderDate
       });
-
-      // Add activity to lead
-      const lead = leads.find(l => l.id === estimate.leadId);
-      if (lead) {
-        const newActivity: LeadActivity = {
-          id: Math.random().toString(36).substr(2, 9),
-          type: 'status_change',
-          message: `Estimate v${estimate.version} status updated to ${newStatus}`,
-          timestamp: new Date().toISOString(),
-          userName: user.displayName || user.email || 'Unknown',
-          userId: user.uid
-        };
-        await updateDoc(doc(db, 'leads', estimate.leadId), {
-          activities: [...(lead.activities || []), newActivity],
-          updatedAt: serverTimestamp()
-        });
-      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'estimates');
     }
-  };
-
-  const addFollowUpNote = async (leadId: string, note: string, nextDate?: string) => {
-    const lead = leads.find(l => l.id === leadId);
-    if (!lead || !user || !note) return;
-
-    const newActivity: LeadActivity = {
-      id: Math.random().toString(36).substr(2, 9),
-      type: 'note',
-      message: note,
-      timestamp: new Date().toISOString(),
-      userName: user.displayName || user.email || 'Unknown',
-      userId: user.uid
-    };
-
-    try {
-      await updateDoc(doc(db, 'leads', leadId), {
-        updatedAt: serverTimestamp(),
-        nextFollowUpDate: nextDate || lead.nextFollowUpDate,
-        activities: [...(lead.activities || []), newActivity]
-      });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, 'leads');
-    }
-  };
-
-  const editLead = (lead: Lead) => {
-    setCurrentLeadId(lead.id!);
-    setAssignee(lead.assignee);
-    setClientName(lead.clientName);
-    setPhoneNumber(lead.phoneNumber);
-    setSiteAddress(lead.siteAddress);
-    setArchitectName(lead.architectName);
-    setLeadRemarks(lead.remarks);
-    setView('lead_form');
-  };
-
-  const viewLeadDetail = (lead: Lead) => {
-    setSelectedLeadId(lead.id!);
-    setView('lead_detail');
   };
 
   const viewEstimateDetail = (estimate: Estimate) => {
@@ -609,17 +480,13 @@ function AppContent() {
   };
 
   const editEstimate = (estimate: Estimate) => {
-    const lead = leads.find(l => l.id === estimate.leadId);
-    if (!lead) return;
-
-    setCurrentLeadId(lead.id!);
-    setClientName(lead.clientName);
-    setPhoneNumber(lead.phoneNumber);
-    setAssignee(lead.assignee);
-    setSiteAddress(lead.siteAddress);
-    setArchitectName(lead.architectName);
-
     setCurrentEstimateId(estimate.id!);
+    setClientName(estimate.clientName);
+    setPhoneNumber(estimate.phoneNumber);
+    setAssignee(estimate.assignee);
+    setSiteAddress(estimate.siteAddress);
+    setArchitectName(estimate.architectName);
+
     setEstimateStatus(estimate.estimateStatus);
     setPaymentMode(estimate.paymentMode);
     setPaymentStatus(estimate.paymentStatus);
@@ -633,27 +500,10 @@ function AppContent() {
     setView('estimate_form');
   };
 
-  const createNewEstimate = (lead: Lead) => {
-    resetForm();
-    setCurrentLeadId(lead.id!);
-    setClientName(lead.clientName);
-    setPhoneNumber(lead.phoneNumber);
-    setAssignee(lead.assignee);
-    setSiteAddress(lead.siteAddress);
-    setArchitectName(lead.architectName);
-    setView('estimate_form');
-  };
-
   // --- Data Fetching ---
   useEffect(() => {
     if (!user) return;
     
-    // Fetch Leads
-    const leadsQuery = query(collection(db, 'leads'), orderBy('updatedAt', 'desc'));
-    const unsubscribeLeads = onSnapshot(leadsQuery, (snapshot) => {
-      setLeads(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Lead)));
-    }, (error) => handleFirestoreError(error, OperationType.LIST, 'leads'));
-
     // Fetch Estimates
     const estimatesQuery = query(collection(db, 'estimates'), orderBy('updatedAt', 'desc'));
     const unsubscribeEstimates = onSnapshot(estimatesQuery, (snapshot) => {
@@ -661,51 +511,37 @@ function AppContent() {
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'estimates'));
 
     return () => {
-      unsubscribeLeads();
       unsubscribeEstimates();
     };
   }, [user]);
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter(l => {
+  const filteredEstimates = useMemo(() => {
+    return estimates.filter(e => {
       const matchesSearch = 
-        l.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.phoneNumber.includes(searchQuery) ||
-        (l.architectName?.toLowerCase().includes(searchQuery.toLowerCase()));
+        e.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.phoneNumber.includes(searchQuery) ||
+        (e.architectName?.toLowerCase().includes(searchQuery.toLowerCase()));
       
-      const matchesAssignee = !assigneeFilter || l.assignee === assigneeFilter;
+      const matchesAssignee = !assigneeFilter || e.assignee === assigneeFilter;
 
       return matchesSearch && matchesAssignee;
     });
-  }, [leads, searchQuery, assigneeFilter]);
-
-  const selectedLead = useMemo(() => 
-    leads.find(l => l.id === selectedLeadId) || null
-  , [leads, selectedLeadId]);
-
-  const selectedLeadEstimates = useMemo(() => 
-    estimates.filter(e => e.leadId === selectedLeadId)
-  , [estimates, selectedLeadId]);
+  }, [estimates, searchQuery, assigneeFilter]);
 
   const selectedEstimate = useMemo(() => 
     estimates.find(e => e.id === selectedEstimateId) || null
   , [estimates, selectedEstimateId]);
 
   const dashboardStats = useMemo(() => {
-    const totalLeads = leads.length;
+    const totalEstimates = estimates.length;
     const confirmedOrders = estimates.filter(e => e.estimateStatus === 'Order Confirmed').length;
     const pendingPayments = estimates.filter(e => e.paymentStatus === 'Not Paid' || e.paymentStatus === 'Partially Paid').length;
     
-    return { totalLeads, confirmedOrders, pendingPayments };
-  }, [leads, estimates]);
-
-  const followUpsToday = useMemo(() => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    return leads.filter(l => l.nextFollowUpDate === today);
-  }, [leads]);
+    return { totalEstimates, confirmedOrders, pendingPayments };
+  }, [estimates]);
 
   // --- PDF Export ---
-  const generatePDF = (lead: Lead, estimate: Estimate) => {
+  const generatePDF = (estimate: Estimate) => {
     const doc = new jsPDF();
     
     // Header
@@ -720,31 +556,33 @@ function AppContent() {
 
     // Client Info
     doc.setFontSize(12);
-    doc.text(`ESTIMATE v${estimate.version}`, 20, 42);
+    doc.text(`ESTIMATE v${estimate.version || 1}`, 20, 42);
     doc.setFontSize(10);
     doc.text(`Date: ${format(new Date(estimate.updatedAt?.toDate() || new Date()), 'dd MMM yyyy')}`, 190, 42, { align: 'right' });
 
     doc.setFont('helvetica', 'bold');
     doc.text('Client Details:', 20, 52);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Name: ${lead.clientName}`, 20, 58);
-    doc.text(`Phone: ${lead.phoneNumber}`, 20, 64);
-    doc.text(`Address: ${lead.siteAddress || 'N/A'}`, 20, 70);
+    doc.text(`Name: ${estimate.clientName}`, 20, 58);
+    doc.text(`Phone: ${estimate.phoneNumber}`, 20, 64);
+    doc.text(`Address: ${estimate.siteAddress || 'N/A'}`, 20, 70);
 
     doc.setFont('helvetica', 'bold');
     doc.text('Sales Info:', 120, 52);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Assignee: ${lead.assignee}`, 120, 58);
-    doc.text(`Architect: ${lead.architectName || 'N/A'}`, 120, 64);
+    doc.text(`Assignee: ${estimate.assignee}`, 120, 58);
+    doc.text(`Architect: ${estimate.architectName || 'N/A'}`, 120, 64);
     doc.text(`Payment: ${estimate.paymentMode}`, 120, 70);
 
     // Table
     (doc as any).autoTable({
       startY: 80,
-      head: [['Product', 'Size', 'Price/SqFt', 'SqFt', 'Boxes', 'Total']],
+      head: [['Product', 'Dimensions', 'Unit', 'Tiles/Box', 'Price/SqFt', 'SqFt', 'Boxes', 'Total']],
       body: estimate.products.map(p => [
         p.tileName,
-        p.tileSize,
+        `${p.length} x ${p.width}`,
+        p.unit,
+        p.tilesPerBox,
         `₹${p.pricePerSqFt}`,
         p.sqFtRequired,
         p.totalBoxes,
@@ -769,7 +607,7 @@ function AppContent() {
       doc.text(estimate.remarks, 20, finalY + 20, { maxWidth: 170 });
     }
 
-    doc.save(`Estimate_${lead.clientName}_v${estimate.version}.pdf`);
+    doc.save(`Estimate_${estimate.clientName}_v${estimate.version || 1}.pdf`);
   };
 
   if (loading) {
@@ -826,14 +664,14 @@ function AppContent() {
               <span className="text-sm hidden md:block">Dashboard</span>
             </button>
             <button
-              onClick={() => { resetForm(); setView('lead_form'); }}
+              onClick={() => { resetForm(); setView('estimate_form'); }}
               className={cn(
                 "p-2.5 rounded-xl transition-all flex items-center gap-2",
-                view === 'lead_form' ? "bg-blue-50 text-blue-600 font-bold" : "text-slate-600 hover:bg-slate-100"
+                view === 'estimate_form' ? "bg-blue-50 text-blue-600 font-bold" : "text-slate-600 hover:bg-slate-100"
               )}
             >
               <Plus size={20} />
-              <span className="text-sm hidden md:block">New Lead</span>
+              <span className="text-sm hidden md:block">New Estimate</span>
             </button>
             <button
               onClick={handleLogout}
@@ -848,37 +686,10 @@ function AppContent() {
       <main className="max-w-5xl mx-auto px-4 pt-6">
         {view === 'dashboard' && (
           <div className="space-y-8">
-            {/* Follow-ups Today Banner */}
-            {followUpsToday.length > 0 && (
-              <div className="bg-blue-600 rounded-3xl p-6 text-white flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg shadow-blue-200">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                    <Phone size={24} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg">You have {followUpsToday.length} follow-ups today</h3>
-                    <p className="text-blue-100 text-sm">Don't forget to call your clients and update their status.</p>
-                  </div>
-                </div>
-                <div className="flex -space-x-3">
-                  {followUpsToday.slice(0, 5).map((l, i) => (
-                    <div key={i} className="w-10 h-10 rounded-full border-2 border-blue-600 bg-white flex items-center justify-center text-blue-600 font-bold text-xs shadow-sm">
-                      {l.clientName.charAt(0)}
-                    </div>
-                  ))}
-                  {followUpsToday.length > 5 && (
-                    <div className="w-10 h-10 rounded-full border-2 border-blue-600 bg-blue-800 flex items-center justify-center text-white font-bold text-xs">
-                      +{followUpsToday.length - 5}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {[
-                { label: 'Total Leads', value: dashboardStats.totalLeads, color: 'blue' },
+                { label: 'Total Estimates', value: dashboardStats.totalEstimates, color: 'blue' },
                 { label: 'Confirmed Orders', value: dashboardStats.confirmedOrders, color: 'emerald' },
                 { label: 'Pending Payments', value: dashboardStats.pendingPayments, color: 'amber' },
               ].map((stat, i) => (
@@ -893,9 +704,9 @@ function AppContent() {
             <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <div className="flex-1 w-full">
                 <Input
-                  label="Search Leads"
+                  label="Search Estimates"
                   icon={Search}
-                  placeholder="Name, Phone or Architect..."
+                  placeholder="Client Name, Phone or Architect..."
                   value={searchQuery}
                   onChange={(e: any) => setSearchQuery(e.target.value)}
                 />
@@ -916,7 +727,7 @@ function AppContent() {
               </button>
             </div>
 
-            {/* Leads Table */}
+            {/* Estimates Table */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
@@ -925,51 +736,58 @@ function AppContent() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Client / Date</th>
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Site Address</th>
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Assignee</th>
-                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">Estimates</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
+                      <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total</th>
                       <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-500 uppercase tracking-widest">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredLeads.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-slate-50/50 transition-colors group">
+                    {filteredEstimates.map((estimate) => (
+                      <tr key={estimate.id} className="hover:bg-slate-50/50 transition-colors group">
                         <td className="px-6 py-4">
-                          <div className="font-bold text-slate-900">{lead.clientName}</div>
+                          <div className="font-bold text-slate-900">{estimate.clientName}</div>
                           <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Phone size={10} /> {lead.phoneNumber}
+                            <Phone size={10} /> {estimate.phoneNumber}
                           </div>
                           <div className="text-[10px] text-slate-400 mt-1">
-                            {lead.createdAt ? format((lead.createdAt as any).toDate(), 'dd MMM yyyy') : 'Just now'}
+                            {estimate.updatedAt ? format((estimate.updatedAt as any).toDate(), 'dd MMM yyyy') : 'Just now'}
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <p className="text-sm text-slate-600 truncate max-w-[200px]">{lead.siteAddress || 'N/A'}</p>
+                          <p className="text-sm text-slate-600 truncate max-w-[200px]">{estimate.siteAddress || 'N/A'}</p>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 bg-slate-100 rounded-full flex items-center justify-center text-[10px] font-bold text-slate-600">
-                              {lead.assignee.charAt(0)}
+                              {estimate.assignee.charAt(0)}
                             </div>
-                            <span className="text-sm text-slate-700">{lead.assignee}</span>
+                            <span className="text-sm text-slate-700">{estimate.assignee}</span>
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className="px-2 py-1 bg-slate-100 rounded-lg text-xs font-bold text-slate-600">
-                            {estimates.filter(e => e.leadId === lead.id).length}
+                          <span className={cn(
+                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                            ESTIMATE_STATUS_CONFIG[estimate.estimateStatus as keyof typeof ESTIMATE_STATUS_CONFIG]?.color || "bg-slate-100 text-slate-600"
+                          )}>
+                            {estimate.estimateStatus}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <p className="text-sm font-bold text-slate-900">₹{estimate.grandTotal.toLocaleString()}</p>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
                             <button 
-                              onClick={() => viewLeadDetail(lead)}
+                              onClick={() => viewEstimateDetail(estimate)}
                               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                               title="View Details"
                             >
                               <FileText size={18} />
                             </button>
                             <button 
-                              onClick={() => editLead(lead)}
+                              onClick={() => editEstimate(estimate)}
                               className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-                              title="Edit Lead"
+                              title="Edit Estimate"
                             >
                               <Plus size={18} className="rotate-45" />
                             </button>
@@ -980,16 +798,16 @@ function AppContent() {
                   </tbody>
                 </table>
               </div>
-              {filteredLeads.length === 0 && (
+              {filteredEstimates.length === 0 && (
                 <div className="p-12 text-center">
-                  <p className="text-slate-400">No leads found matching your criteria.</p>
+                  <p className="text-slate-400">No estimates found matching your criteria.</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {view === 'lead_detail' && selectedLead && (
+        {view === 'estimate_detail' && selectedEstimate && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <button 
@@ -1001,255 +819,13 @@ function AppContent() {
               </button>
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => editLead(selectedLead)}
-                  className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50"
-                >
-                  Edit Lead
-                </button>
-                <button 
-                  onClick={() => {
-                    resetForm();
-                    setClientName(selectedLead.clientName);
-                    setPhoneNumber(selectedLead.phoneNumber);
-                    setSiteAddress(selectedLead.siteAddress);
-                    setArchitectName(selectedLead.architectName);
-                    setAssignee(selectedLead.assignee);
-                    setView('estimate_form');
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 flex items-center gap-2"
-                >
-                  <Plus size={16} />
-                  New Estimate
-                </button>
-              </div>
-            </div>
-
-            {/* Lead Summary Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Estimates</p>
-                <p className="text-xl font-bold text-slate-900">{estimates.filter(e => e.leadId === selectedLead.id).length}</p>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Confirmed Orders</p>
-                <p className="text-xl font-bold text-blue-600">{estimates.filter(e => e.leadId === selectedLead.id && e.estimateStatus === 'Order Confirmed').length}</p>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Revenue</p>
-                <p className="text-xl font-bold text-emerald-600">₹{estimates.filter(e => e.leadId === selectedLead.id && e.estimateStatus === 'Order Confirmed').reduce((acc, curr) => acc + curr.grandTotal, 0).toLocaleString()}</p>
-              </div>
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Outstanding</p>
-                <p className="text-xl font-bold text-amber-600">₹{estimates.filter(e => e.leadId === selectedLead.id && e.estimateStatus === 'Order Confirmed').reduce((acc, curr) => acc + curr.balanceAmount, 0).toLocaleString()}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Lead Info & Estimates */}
-              <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
-                  <div className="flex justify-between items-start mb-8">
-                    <div>
-                      <h2 className="text-3xl font-bold text-slate-900 mb-1">{selectedLead.clientName}</h2>
-                      <div className="flex items-center gap-4 text-slate-500">
-                        <span className="flex items-center gap-1.5"><Phone size={14} /> {selectedLead.phoneNumber}</span>
-                        <span className="flex items-center gap-1.5"><MapPin size={14} /> {selectedLead.siteAddress || 'No address'}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-6 py-6 border-t border-slate-100">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Assignee</p>
-                      <p className="font-bold text-slate-700">{selectedLead.assignee}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Architect</p>
-                      <p className="font-bold text-slate-700">{selectedLead.architectName || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Lead Created</p>
-                      <p className="font-bold text-slate-700">{selectedLead.createdAt ? format((selectedLead.createdAt as any).toDate(), 'dd MMM yyyy') : 'N/A'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Estimates Table */}
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-900 flex items-center gap-2">
-                      <FileText size={18} className="text-slate-400" />
-                      Estimates & Orders
-                    </h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-slate-50/50">
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID / Date</th>
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Items</th>
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</th>
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
-                          <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {estimates.filter(e => e.leadId === selectedLead.id).sort((a, b) => (b.createdAt as any)?.toDate() - (a.createdAt as any)?.toDate()).map((estimate) => (
-                          <tr key={estimate.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                              <p className="font-bold text-slate-900">EST-{estimate.id?.slice(0, 4)} v{estimate.version}</p>
-                              <p className="text-[10px] text-slate-400">{estimate.createdAt ? format((estimate.createdAt as any).toDate(), 'dd MMM yyyy') : 'N/A'}</p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <p className="text-sm text-slate-600">{estimate.products.length} Products</p>
-                              <p className="text-[10px] text-slate-400">{estimate.totalBoxes} Boxes</p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <p className="text-sm font-bold text-slate-900">₹{estimate.grandTotal.toLocaleString()}</p>
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={cn(
-                                "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                                ESTIMATE_STATUS_CONFIG[estimate.estimateStatus as keyof typeof ESTIMATE_STATUS_CONFIG]?.color || "bg-slate-100 text-slate-600"
-                              )}>
-                                {estimate.estimateStatus}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <div className="flex items-center justify-center gap-2">
-                                <button 
-                                  onClick={() => viewEstimateDetail(estimate)}
-                                  className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                  title="View Details"
-                                >
-                                  <FileText size={18} />
-                                </button>
-                                <button 
-                                  onClick={() => duplicateEstimate(estimate)}
-                                  className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                                  title="Duplicate"
-                                >
-                                  <Plus size={18} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  {estimates.filter(e => e.leadId === selectedLead.id).length === 0 && (
-                    <div className="p-12 text-center">
-                      <p className="text-slate-400">No estimates created yet.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Activity Timeline */}
-                <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
-                  <h3 className="font-bold text-slate-900 mb-6 flex items-center gap-2">
-                    <History size={18} className="text-slate-400" />
-                    Activity Timeline
-                  </h3>
-                  <div className="space-y-6">
-                    {selectedLead.activities?.slice().reverse().map((activity, i) => (
-                      <div key={activity.id} className="relative pl-6 pb-6 last:pb-0">
-                        {i !== (selectedLead.activities?.length || 0) - 1 && (
-                          <div className="absolute left-[7px] top-2 bottom-0 w-px bg-slate-100"></div>
-                        )}
-                        <div className="absolute left-0 top-1.5 w-3.5 h-3.5 rounded-full bg-white border-2 border-blue-500"></div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-sm font-bold text-slate-800">{activity.message}</p>
-                            <span className="text-[10px] text-slate-400">{format(new Date(activity.timestamp), 'dd MMM, HH:mm')}</span>
-                          </div>
-                          <p className="text-xs text-slate-500">by {activity.userName}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Actions & CRM */}
-              <div className="space-y-6">
-                <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-xl">
-                  <h3 className="font-bold mb-4 flex items-center gap-2">
-                    <Phone size={18} className="text-blue-400" />
-                    Quick Follow-up
-                  </h3>
-                  <div className="grid grid-cols-2 gap-3 mb-6">
-                    <a 
-                      href={`tel:${selectedLead.phoneNumber}`}
-                      className="flex flex-col items-center justify-center p-4 bg-white/10 rounded-2xl hover:bg-white/20 transition-colors"
-                    >
-                      <Phone size={20} className="mb-2" />
-                      <span className="text-xs font-bold">Call</span>
-                    </a>
-                    <button 
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedLead.phoneNumber);
-                        alert('Phone number copied!');
-                      }}
-                      className="flex flex-col items-center justify-center p-4 bg-white/10 rounded-2xl hover:bg-white/20 transition-colors"
-                    >
-                      <FileText size={20} className="mb-2" />
-                      <span className="text-xs font-bold">Copy</span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Next Follow-up</label>
-                      <input 
-                        type="date"
-                        className="w-full bg-white/10 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                        value={selectedLead.nextFollowUpDate?.split('T')[0] || ''}
-                        onChange={(e) => addFollowUpNote(selectedLead.id!, 'Updated follow-up date', e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quick Note</label>
-                      <textarea 
-                        placeholder="Add a note..."
-                        className="w-full bg-white/10 border-none rounded-xl px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
-                        rows={3}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            addFollowUpNote(selectedLead.id!, (e.target as HTMLTextAreaElement).value);
-                            (e.target as HTMLTextAreaElement).value = '';
-                          }
-                        }}
-                      />
-                      <p className="text-[10px] text-slate-500 italic">Press Enter to save note</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {view === 'estimate_detail' && selectedEstimate && selectedLead && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <button 
-                onClick={() => setView('lead_detail')}
-                className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
-              >
-                <ChevronRight size={18} className="rotate-180" />
-                Back to Lead
-              </button>
-              <div className="flex items-center gap-3">
-                <button 
                   onClick={() => editEstimate(selectedEstimate)}
                   className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50"
                 >
                   Edit Estimate
                 </button>
                 <button 
-                  onClick={() => generatePDF(selectedLead, selectedEstimate)}
+                  onClick={() => generatePDF(selectedEstimate)}
                   className="px-4 py-2 bg-slate-900 rounded-xl text-sm font-bold text-white hover:bg-slate-800 flex items-center gap-2"
                 >
                   <Printer size={16} />
@@ -1265,7 +841,7 @@ function AppContent() {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
                       <div className="flex items-center gap-3 mb-1">
-                        <h2 className="text-2xl font-bold text-slate-900">Estimate v{selectedEstimate.version}</h2>
+                        <h2 className="text-2xl font-bold text-slate-900">Estimate v{selectedEstimate.version || 1}</h2>
                         <span className={cn(
                           "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
                           ESTIMATE_STATUS_CONFIG[selectedEstimate.estimateStatus as keyof typeof ESTIMATE_STATUS_CONFIG]?.color || "bg-slate-100 text-slate-600"
@@ -1293,7 +869,7 @@ function AppContent() {
                           </div>
                           <div>
                             <p className="text-xs text-slate-400">Name</p>
-                            <p className="text-sm font-bold text-slate-800">{selectedLead.clientName}</p>
+                            <p className="text-sm font-bold text-slate-800">{selectedEstimate.clientName}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -1302,7 +878,7 @@ function AppContent() {
                           </div>
                           <div>
                             <p className="text-xs text-slate-400">Phone</p>
-                            <p className="text-sm font-bold text-slate-800">{selectedLead.phoneNumber}</p>
+                            <p className="text-sm font-bold text-slate-800">{selectedEstimate.phoneNumber}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -1311,7 +887,7 @@ function AppContent() {
                           </div>
                           <div>
                             <p className="text-xs text-slate-400">Site Address</p>
-                            <p className="text-sm font-bold text-slate-800">{selectedLead.siteAddress || 'N/A'}</p>
+                            <p className="text-sm font-bold text-slate-800">{selectedEstimate.siteAddress || 'N/A'}</p>
                           </div>
                         </div>
                       </div>
@@ -1325,7 +901,7 @@ function AppContent() {
                           </div>
                           <div>
                             <p className="text-xs text-slate-400">Assignee</p>
-                            <p className="text-sm font-bold text-slate-800">{selectedLead.assignee}</p>
+                            <p className="text-sm font-bold text-slate-800">{selectedEstimate.assignee}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -1334,7 +910,7 @@ function AppContent() {
                           </div>
                           <div>
                             <p className="text-xs text-slate-400">Architect</p>
-                            <p className="text-sm font-bold text-slate-800">{selectedLead.architectName || 'N/A'}</p>
+                            <p className="text-sm font-bold text-slate-800">{selectedEstimate.architectName || 'N/A'}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -1358,6 +934,7 @@ function AppContent() {
                           <tr className="border-b border-slate-100">
                             <th className="py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Product</th>
                             <th className="py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Size</th>
+                            <th className="py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Price/SqFt</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">SqFt</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Boxes</th>
@@ -1368,7 +945,8 @@ function AppContent() {
                           {selectedEstimate.products.map((p) => (
                             <tr key={p.id}>
                               <td className="py-4 text-sm font-bold text-slate-800">{p.tileName}</td>
-                              <td className="py-4 text-sm text-slate-600">{p.tileSize}</td>
+                              <td className="py-4 text-sm text-slate-600">{p.length} x {p.width}</td>
+                              <td className="py-4 text-sm text-slate-600 uppercase">{p.unit}</td>
                               <td className="py-4 text-sm text-right text-slate-600 font-mono">₹{p.pricePerSqFt}</td>
                               <td className="py-4 text-sm text-right text-slate-600 font-mono">{p.sqFtRequired}</td>
                               <td className="py-4 text-sm text-right text-slate-600 font-mono">{p.totalBoxes}</td>
@@ -1378,7 +956,7 @@ function AppContent() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-slate-100">
-                            <td colSpan={4} className="py-4 text-right text-sm font-bold text-slate-500">Summary</td>
+                            <td colSpan={5} className="py-4 text-right text-sm font-bold text-slate-500">Summary</td>
                             <td className="py-4 text-right text-sm font-bold text-slate-900 font-mono">{selectedEstimate.totalBoxes}</td>
                             <td className="py-4 text-right text-lg font-bold text-blue-600 font-mono">₹{selectedEstimate.grandTotal.toLocaleString()}</td>
                           </tr>
@@ -1471,7 +1049,7 @@ function AppContent() {
                       Duplicate Estimate
                     </button>
                     <button 
-                      onClick={() => generatePDF(selectedLead, selectedEstimate)}
+                      onClick={() => generatePDF(selectedEstimate)}
                       className="w-full py-3 bg-white/10 hover:bg-white/20 rounded-xl text-sm font-bold transition-colors flex items-center justify-center gap-2"
                     >
                       <Printer size={16} />
@@ -1496,28 +1074,28 @@ function AppContent() {
           </div>
         )}
 
-        {view === 'lead_form' && (
+        {view === 'estimate_form' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <button 
-                onClick={() => setView(currentLeadId ? 'lead_detail' : 'dashboard')}
+                onClick={() => setView('dashboard')}
                 className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
               >
                 <ChevronRight size={18} className="rotate-180" />
                 Cancel
               </button>
-              <h2 className="text-xl font-bold text-slate-900">{currentLeadId ? 'Edit Lead' : 'New Lead'}</h2>
-              <div className="w-20"></div> {/* Spacer */}
+              <h2 className="text-xl font-bold text-slate-900">{currentEstimateId ? 'Edit Estimate' : 'New Estimate'}</h2>
+              <div className="w-20"></div>
             </div>
 
-            {/* Lead Info Card */}
+            {/* Client Info Card */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200">
               <div className="flex items-center gap-2 mb-8">
                 <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
                   <User className="text-blue-600" size={20} />
                 </div>
                 <div>
-                  <h2 className="font-bold text-slate-900">Lead Information</h2>
+                  <h2 className="font-bold text-slate-900">Client Information</h2>
                   <p className="text-xs text-slate-500">Basic client and project details</p>
                 </div>
               </div>
@@ -1567,78 +1145,8 @@ function AppContent() {
                     />
                   </div>
                 </div>
-                <div className="md:col-span-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                      <FileText size={14} />
-                      Lead Remarks
-                    </label>
-                    <textarea
-                      placeholder="General notes about this lead..."
-                      rows={2}
-                      value={leadRemarks}
-                      onChange={(e) => setLeadRemarks(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-800 placeholder:text-slate-400"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-10 flex justify-end">
-                <button
-                  onClick={async () => {
-                    const id = await saveLead();
-                    if (id) {
-                      setSelectedLeadId(id);
-                      setView('lead_detail');
-                    }
-                  }}
-                  disabled={isSaving}
-                  className="px-8 py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded-2xl font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-200"
-                >
-                  {isSaving ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <Save size={20} />
-                      {currentLeadId ? 'Update Lead' : 'Create Lead'}
-                    </>
-                  )}
-                </button>
               </div>
             </section>
-          </div>
-        )}
-
-        {view === 'estimate_form' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <button 
-                onClick={() => setView('lead_detail')}
-                className="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
-              >
-                <ChevronRight size={18} className="rotate-180" />
-                Cancel
-              </button>
-              <h2 className="text-xl font-bold text-slate-900">{currentEstimateId ? 'Edit Estimate' : 'New Estimate'}</h2>
-              <div className="w-20"></div>
-            </div>
-
-            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400">
-                  <User size={24} />
-                </div>
-                <div>
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Client</p>
-                  <p className="text-lg font-bold text-slate-900">{clientName}</p>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Site Address</p>
-                <p className="text-sm text-slate-600">{siteAddress || 'N/A'}</p>
-              </div>
-            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
@@ -1665,7 +1173,9 @@ function AppContent() {
                       <thead>
                         <tr className="bg-slate-50 border-y border-slate-100">
                           <th className="px-6 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tile Details</th>
-                          <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Size</th>
+                          <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Size (a x b)</th>
+                          <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</th>
+                          <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tiles/Box</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Price/SqFt</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">SqFt Req.</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">SqFt/Box</th>
@@ -1686,14 +1196,42 @@ function AppContent() {
                               />
                             </td>
                             <td className="px-4 py-4">
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  placeholder="a"
+                                  value={p.length || ''}
+                                  onChange={(e) => updateProduct(p.id, { length: parseFloat(e.target.value) })}
+                                  className="w-10 bg-transparent border-none focus:ring-0 text-sm text-slate-600"
+                                />
+                                <span className="text-slate-300 text-xs">x</span>
+                                <input
+                                  type="number"
+                                  placeholder="b"
+                                  value={p.width || ''}
+                                  onChange={(e) => updateProduct(p.id, { width: parseFloat(e.target.value) })}
+                                  className="w-10 bg-transparent border-none focus:ring-0 text-sm text-slate-600"
+                                />
+                              </div>
+                            </td>
+                            <td className="px-4 py-4">
                               <select
-                                value={p.tileSize}
-                                onChange={(e) => updateProduct(p.id, { tileSize: e.target.value })}
+                                value={p.unit}
+                                onChange={(e) => updateProduct(p.id, { unit: e.target.value as 'ft' | 'inch' })}
                                 className="bg-transparent border-none focus:ring-0 text-sm text-slate-600 appearance-none cursor-pointer"
                               >
-                                <option value="">Size</option>
-                                {TILE_SIZES.map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
+                                <option value="inch">Inch</option>
+                                <option value="ft">Ft</option>
                               </select>
+                            </td>
+                            <td className="px-4 py-4">
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={p.tilesPerBox || ''}
+                                onChange={(e) => updateProduct(p.id, { tilesPerBox: parseFloat(e.target.value) })}
+                                className="w-16 bg-transparent border-none focus:ring-0 text-sm text-slate-600"
+                              />
                             </td>
                             <td className="px-4 py-4">
                               <input
@@ -1714,13 +1252,7 @@ function AppContent() {
                               />
                             </td>
                             <td className="px-4 py-4">
-                              <input
-                                type="number"
-                                placeholder="0"
-                                value={p.sqFtPerBox || ''}
-                                onChange={(e) => updateProduct(p.id, { sqFtPerBox: parseFloat(e.target.value) })}
-                                className="w-20 bg-transparent border-none focus:ring-0 text-sm text-slate-600"
-                              />
+                              <span className="text-sm font-bold text-slate-900">{p.sqFtPerBox.toFixed(2)}</span>
                             </td>
                             <td className="px-4 py-4">
                               <span className="text-sm font-bold text-slate-900">{p.totalBoxes}</span>
@@ -1807,7 +1339,7 @@ function AppContent() {
                   
                   <div className="mt-8 space-y-3">
                     <button
-                      onClick={() => saveEstimate(currentLeadId!)}
+                      onClick={() => saveEstimate()}
                       disabled={isSaving}
                       className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95"
                     >
@@ -1831,10 +1363,10 @@ function AppContent() {
       {/* Mobile Bottom Nav */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-around md:hidden z-40">
         <button 
-          onClick={() => { resetForm(); setView('lead_form'); }}
+          onClick={() => { resetForm(); setView('estimate_form'); }}
           className={cn(
             "flex flex-col items-center gap-1 p-2 transition-all",
-            view === 'lead_form' ? "text-blue-600" : "text-slate-400"
+            view === 'estimate_form' ? "text-blue-600" : "text-slate-400"
           )}
         >
           <Plus size={24} />
@@ -1848,7 +1380,7 @@ function AppContent() {
           )}
         >
           <History size={24} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">Leads</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest">Estimates</span>
         </button>
       </nav>
     </div>

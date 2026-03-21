@@ -1,7 +1,10 @@
 export interface TileProduct {
   id: string;
   tileName: string;
-  tileSize: string;
+  length: number;
+  width: number;
+  unit: 'ft' | 'inch';
+  tilesPerBox: number;
   pricePerSqFt: number;
   sqFtRequired: number;
   sqFtPerBox: number;
@@ -41,23 +44,13 @@ export interface LeadActivity {
   userId: string;
 }
 
-export interface Lead {
+export interface Estimate {
   id?: string;
   clientName: string;
   phoneNumber: string;
   siteAddress: string;
   architectName: string;
   assignee: string;
-  remarks: string;
-  createdAt: any;
-  updatedAt: any;
-  createdBy: string;
-  activities?: LeadActivity[];
-}
-
-export interface Estimate {
-  id?: string;
-  leadId: string;
   version: number;
   createdAt: any;
   updatedAt: any;
@@ -75,6 +68,7 @@ export interface Estimate {
   expectedDeliveryDate?: string;
   deliveryStatus?: DeliveryStatus;
   isFinalOrder?: boolean;
+  createdBy: string;
 }
 
 export const ASSIGNEES = [
@@ -83,13 +77,6 @@ export const ASSIGNEES = [
 
 export const PAYMENT_MODES = [
   'Advance', 'Cash', 'Bank Transfer', 'COD', 'Credit'
-];
-
-export const TILE_SIZES = [
-  { label: '4 x 2', value: 8 },
-  { label: '2 x 2', value: 4 },
-  { label: '2 x 1', value: 2 },
-  { label: '1 x 1', value: 1 }
 ];
 
 export const ESTIMATE_STATUS_CONFIG: Record<EstimateStatus, { color: string, bg: string }> = {
