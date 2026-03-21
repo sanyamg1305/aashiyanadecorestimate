@@ -23,28 +23,15 @@ service cloud.firestore {
     // Domain Validators
     // ===============================================================
 
-    function isValidLead(data) {
-      return hasRequiredFields(data, ['clientName', 'phoneNumber', 'assignee', 'createdAt', 'updatedAt', 'createdBy']) &&
+    function isValidEstimate(data) {
+      return hasRequiredFields(data, ['clientName', 'phoneNumber', 'assignee', 'version', 'estimateStatus', 'products', 'grandTotal', 'createdAt', 'updatedAt']) &&
              data.clientName is string && data.clientName.size() > 0 && data.clientName.size() < 100 &&
              data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() < 20 &&
              data.assignee is string && data.assignee.size() > 0 &&
-             data.createdBy is string;
-    }
-
-    function isValidEstimate(data) {
-      return hasRequiredFields(data, ['leadId', 'version', 'estimateStatus', 'products', 'grandTotal', 'createdAt', 'updatedAt']) &&
-             data.leadId is string &&
              data.version is int &&
              data.estimateStatus is string &&
              data.products is list &&
              data.grandTotal is number;
-    }
-
-    match /leads/{leadId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidLead(request.resource.data);
-      allow update: if isAuthenticated() && isValidLead(request.resource.data);
-      allow delete: if isAdmin();
     }
 
     match /estimates/{estimateId} {

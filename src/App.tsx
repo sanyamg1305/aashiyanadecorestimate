@@ -421,7 +421,10 @@ function AppContent() {
     setProducts([{
       id: Math.random().toString(36).substr(2, 9),
       tileName: '',
-      tileSize: '',
+      length: 0,
+      width: 0,
+      unit: 'inch',
+      tilesPerBox: 0,
       pricePerSqFt: 0,
       sqFtRequired: 0,
       sqFtPerBox: 0,

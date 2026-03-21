@@ -1,8 +1,8 @@
 {
   "entities": {
-    "Lead": {
-      "title": "Lead",
-      "description": "A client lead representing a project.",
+    "Estimate": {
+      "title": "Estimate",
+      "description": "A consolidated client estimate or order.",
       "type": "object",
       "properties": {
         "clientName": { "type": "string" },
@@ -10,33 +10,6 @@
         "siteAddress": { "type": "string" },
         "architectName": { "type": "string" },
         "assignee": { "type": "string" },
-        "remarks": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" },
-        "createdBy": { "type": "string" },
-        "activities": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "type": { "type": "string" },
-              "message": { "type": "string" },
-              "timestamp": { "type": "string", "format": "date-time" },
-              "userName": { "type": "string" },
-              "userId": { "type": "string" }
-            }
-          }
-        }
-      },
-      "required": ["clientName", "phoneNumber", "assignee"]
-    },
-    "Estimate": {
-      "title": "Estimate",
-      "description": "An individual quotation or order linked to a lead.",
-      "type": "object",
-      "properties": {
-        "leadId": { "type": "string" },
         "version": { "type": "integer" },
         "estimateStatus": { "type": "string" },
         "paymentMode": { "type": "string" },
@@ -52,7 +25,10 @@
             "type": "object",
             "properties": {
               "tileName": { "type": "string" },
-              "tileSize": { "type": "string" },
+              "length": { "type": "number" },
+              "width": { "type": "number" },
+              "unit": { "type": "string", "enum": ["ft", "inch"] },
+              "tilesPerBox": { "type": "number" },
               "pricePerSqFt": { "type": "number" },
               "sqFtRequired": { "type": "number" },
               "sqFtPerBox": { "type": "number" },
@@ -67,19 +43,16 @@
         "deliveryStatus": { "type": "string" },
         "isFinalOrder": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
       },
-      "required": ["leadId", "version", "estimateStatus", "products"]
+      "required": ["clientName", "phoneNumber", "assignee", "version", "estimateStatus", "products"]
     }
   },
   "firestore": {
-    "leads": {
-      "schema": "Lead",
-      "description": "Collection of client leads."
-    },
     "estimates": {
       "schema": "Estimate",
-      "description": "Collection of estimates and orders linked to leads."
+      "description": "Collection of consolidated client estimates and orders."
     }
   }
 }
