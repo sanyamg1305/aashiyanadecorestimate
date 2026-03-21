@@ -303,16 +303,17 @@ function AppContent() {
           updated.sqFtPerBox = updated.unit === 'inch' ? totalArea / 144 : totalArea;
         }
 
+        const perBox = updated.sqFtPerBox || 1;
+        const price = updated.pricePerSqFt || 0;
+        const discount = updated.discountPerSqFt || 0;
+
         // Auto-calculate logic for boxes and price
-        if ('sqFtRequired' in updates || 'sqFtPerBox' in updates || 'pricePerSqFt' in updates || 'discountPerSqFt' in updates || 'length' in updates || 'width' in updates || 'unit' in updates || 'tilesPerBox' in updates) {
-          const sqFt = updated.sqFtRequired || 0;
-          const perBox = updated.sqFtPerBox || 1;
-          const price = updated.pricePerSqFt || 0;
-          const discount = updated.discountPerSqFt || 0;
-          
-          updated.totalBoxes = Math.ceil(sqFt / perBox);
-          updated.totalPrice = sqFt * (price - discount);
+        if ('sqFtRequired' in updates || 'sqFtPerBox' in updates) {
+          updated.totalBoxes = Math.ceil((updated.sqFtRequired || 0) / perBox);
         }
+
+        // Calculate total price based on total boxes (full boxes sold)
+        updated.totalPrice = updated.totalBoxes * perBox * (price - discount);
         
         return updated;
       }
@@ -1272,7 +1273,13 @@ function AppContent() {
                               <span className="text-sm font-bold text-slate-900">{p.sqFtPerBox.toFixed(2)}</span>
                             </td>
                             <td className="px-4 py-4">
-                              <span className="text-sm font-bold text-slate-900">{p.totalBoxes}</span>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={p.totalBoxes || ''}
+                                onChange={(e) => updateProduct(p.id, { totalBoxes: parseInt(e.target.value) || 0 })}
+                                className="w-16 bg-transparent border-none focus:ring-0 text-sm font-bold text-slate-900"
+                              />
                             </td>
                             <td className="px-4 py-4 text-right">
                               <span className="text-sm font-bold text-slate-900">₹{p.totalPrice.toLocaleString()}</span>
