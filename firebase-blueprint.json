@@ -30,6 +30,7 @@
               "unit": { "type": "string", "enum": ["ft", "inch"] },
               "tilesPerBox": { "type": "number" },
               "pricePerSqFt": { "type": "number" },
+              "discountPerSqFt": { "type": "number" },
               "sqFtRequired": { "type": "number" },
               "sqFtPerBox": { "type": "number" },
               "totalBoxes": { "type": "number" },

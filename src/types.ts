@@ -10,6 +10,7 @@ export interface TileProduct {
   sqFtPerBox: number;
   totalBoxes: number;
   totalPrice: number;
+  discountPerSqFt?: number;
   costPricePerSqFt?: number;
 }
 

@@ -304,13 +304,14 @@ function AppContent() {
         }
 
         // Auto-calculate logic for boxes and price
-        if ('sqFtRequired' in updates || 'sqFtPerBox' in updates || 'pricePerSqFt' in updates || 'length' in updates || 'width' in updates || 'unit' in updates || 'tilesPerBox' in updates) {
+        if ('sqFtRequired' in updates || 'sqFtPerBox' in updates || 'pricePerSqFt' in updates || 'discountPerSqFt' in updates || 'length' in updates || 'width' in updates || 'unit' in updates || 'tilesPerBox' in updates) {
           const sqFt = updated.sqFtRequired || 0;
           const perBox = updated.sqFtPerBox || 1;
           const price = updated.pricePerSqFt || 0;
+          const discount = updated.discountPerSqFt || 0;
           
           updated.totalBoxes = Math.ceil(sqFt / perBox);
-          updated.totalPrice = sqFt * price;
+          updated.totalPrice = sqFt * (price - discount);
         }
         
         return updated;
@@ -328,6 +329,7 @@ function AppContent() {
       unit: 'inch',
       tilesPerBox: 0,
       pricePerSqFt: 0,
+      discountPerSqFt: 0,
       sqFtRequired: 0,
       sqFtPerBox: 0,
       totalBoxes: 0,
@@ -424,6 +426,7 @@ function AppContent() {
       unit: 'inch',
       tilesPerBox: 0,
       pricePerSqFt: 0,
+      discountPerSqFt: 0,
       sqFtRequired: 0,
       sqFtPerBox: 0,
       totalBoxes: 0,
@@ -578,13 +581,14 @@ function AppContent() {
     // Table
     (doc as any).autoTable({
       startY: 80,
-      head: [['Product', 'Dimensions', 'Unit', 'Tiles/Box', 'Price/SqFt', 'SqFt', 'Boxes', 'Total']],
+      head: [['Product', 'Dimensions', 'Unit', 'Tiles/Box', 'Price/SqFt', 'Disc', 'SqFt', 'Boxes', 'Total']],
       body: estimate.products.map(p => [
         p.tileName,
         `${p.length} x ${p.width}`,
         p.unit,
         p.tilesPerBox,
         `₹${p.pricePerSqFt}`,
+        `₹${p.discountPerSqFt || 0}`,
         p.sqFtRequired,
         p.totalBoxes,
         `₹${p.totalPrice.toLocaleString()}`
@@ -937,6 +941,7 @@ function AppContent() {
                             <th className="py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Size</th>
                             <th className="py-3 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unit</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Price/SqFt</th>
+                            <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Disc</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">SqFt</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Boxes</th>
                             <th className="py-3 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total</th>
@@ -949,6 +954,7 @@ function AppContent() {
                               <td className="py-4 text-sm text-slate-600">{p.length} x {p.width}</td>
                               <td className="py-4 text-sm text-slate-600 uppercase">{p.unit}</td>
                               <td className="py-4 text-sm text-right text-slate-600 font-mono">₹{p.pricePerSqFt}</td>
+                              <td className="py-4 text-sm text-right text-red-500 font-mono">₹{p.discountPerSqFt || 0}</td>
                               <td className="py-4 text-sm text-right text-slate-600 font-mono">{p.sqFtRequired}</td>
                               <td className="py-4 text-sm text-right text-slate-600 font-mono">{p.totalBoxes}</td>
                               <td className="py-4 text-sm text-right font-bold text-slate-900 font-mono">₹{p.totalPrice.toLocaleString()}</td>
@@ -1178,6 +1184,7 @@ function AppContent() {
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Unit</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tiles/Box</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Price/SqFt</th>
+                          <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Disc/SqFt</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">SqFt Req.</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">SqFt/Box</th>
                           <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Boxes</th>
@@ -1241,6 +1248,15 @@ function AppContent() {
                                 value={p.pricePerSqFt || ''}
                                 onChange={(e) => updateProduct(p.id, { pricePerSqFt: parseFloat(e.target.value) })}
                                 className="w-20 bg-transparent border-none focus:ring-0 text-sm text-slate-600"
+                              />
+                            </td>
+                            <td className="px-4 py-4">
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={p.discountPerSqFt || ''}
+                                onChange={(e) => updateProduct(p.id, { discountPerSqFt: parseFloat(e.target.value) })}
+                                className="w-16 bg-transparent border-none focus:ring-0 text-sm text-slate-600 font-medium text-red-500"
                               />
                             </td>
                             <td className="px-4 py-4">
