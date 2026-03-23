@@ -19,21 +19,28 @@
         "grandTotal": { "type": "number" },
         "subtotal": { "type": "number" },
         "totalBoxes": { "type": "number" },
+        "tileTotal": { "type": "number" },
+        "graniteTotal": { "type": "number" },
+        "productTotal": { "type": "number" },
+        "cartageAmount": { "type": "number" },
         "products": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
-              "tileName": { "type": "string" },
-              "length": { "type": "number" },
-              "width": { "type": "number" },
-              "unit": { "type": "string", "enum": ["ft", "inch"] },
-              "tilesPerBox": { "type": "number" },
+              "type": { "type": "string", "enum": ["tile", "quartz", "granite", "product"] },
+              "name": { "type": "string" },
+              "tileSize": { "type": "string" },
               "pricePerSqFt": { "type": "number" },
               "discountPerSqFt": { "type": "number" },
               "sqFtRequired": { "type": "number" },
               "sqFtPerBox": { "type": "number" },
               "totalBoxes": { "type": "number" },
+              "totalSqFt": { "type": "number" },
+              "gstApplied": { "type": "boolean" },
+              "gstAmount": { "type": "number" },
+              "pieces": { "type": "number" },
+              "pricePerPiece": { "type": "number" },
               "totalPrice": { "type": "number" }
             }
           }

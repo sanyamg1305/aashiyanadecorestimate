@@ -1,17 +1,30 @@
-export interface TileProduct {
+export type ProductType = 'tile' | 'quartz' | 'granite' | 'product';
+
+export interface EstimateProduct {
   id: string;
-  tileName: string;
-  length: number;
-  width: number;
-  unit: 'ft' | 'inch';
-  tilesPerBox: number;
-  pricePerSqFt: number;
-  sqFtRequired: number;
-  sqFtPerBox: number;
-  totalBoxes: number;
-  totalPrice: number;
+  type: ProductType;
+  name: string;
+  
+  // Tile / Quartz specific
+  tileSize?: string; // 4x2, 2x2, 2x1, 1x1
+  pricePerSqFt?: number;
+  sqFtRequired?: number;
+  sqFtPerBox?: number;
+  totalBoxes?: number;
   discountPerSqFt?: number;
-  costPricePerSqFt?: number;
+  
+  // Granite specific
+  totalSqFt?: number;
+  // pricePerSqFt (shared)
+  // discountPerSqFt (shared)
+  gstApplied?: boolean;
+  gstAmount?: number;
+  
+  // Other Product specific
+  pieces?: number;
+  pricePerPiece?: number;
+  
+  totalPrice: number;
 }
 
 export type EstimateStatus = 
@@ -63,7 +76,11 @@ export interface Estimate {
   grandTotal: number;
   subtotal: number;
   totalBoxes: number;
-  products: TileProduct[];
+  tileTotal: number;
+  graniteTotal: number;
+  productTotal: number;
+  cartageAmount: number;
+  products: EstimateProduct[];
   remarks: string;
   orderDate?: string;
   expectedDeliveryDate?: string;
