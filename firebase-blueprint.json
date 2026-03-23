@@ -30,7 +30,11 @@
             "properties": {
               "type": { "type": "string", "enum": ["tile", "quartz", "granite", "product"] },
               "name": { "type": "string" },
-              "tileSize": { "type": "string" },
+              "tileSize": { "type": "string", "description": "Deprecated: use length/width/unit instead" },
+              "length": { "type": "number" },
+              "width": { "type": "number" },
+              "unit": { "type": "string", "enum": ["Feet", "Inches"] },
+              "tileAreaSqFt": { "type": "number" },
               "pricePerSqFt": { "type": "number" },
               "discountPerSqFt": { "type": "number" },
               "sqFtRequired": { "type": "number" },

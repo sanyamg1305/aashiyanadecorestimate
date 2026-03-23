@@ -6,7 +6,11 @@ export interface EstimateProduct {
   name: string;
   
   // Tile / Quartz specific
-  tileSize?: string; // 4x2, 2x2, 2x1, 1x1
+  tileSize?: string; // Deprecated, but keeping for compatibility
+  length?: number;
+  width?: number;
+  unit?: 'Feet' | 'Inches';
+  tileAreaSqFt?: number;
   pricePerSqFt?: number;
   sqFtRequired?: number;
   sqFtPerBox?: number;
