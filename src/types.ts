@@ -1,12 +1,11 @@
-export type ProductType = 'tile' | 'quartz' | 'granite' | 'product';
+export type ProductType = 'tile' | 'granite' | 'specta' | 'product';
 
 export interface EstimateProduct {
   id: string;
   type: ProductType;
   name: string;
   
-  // Tile / Quartz specific
-  tileSize?: string; // Deprecated, but keeping for compatibility
+  // Tile specific
   length?: number;
   width?: number;
   unit?: 'Feet' | 'Inches';
@@ -23,6 +22,16 @@ export interface EstimateProduct {
   // discountPerSqFt (shared)
   gstApplied?: boolean;
   gstAmount?: number;
+  
+  // Specta specific
+  spectaName?: string;
+  numberOfSlabs?: number;
+  slabAreaSqFt?: number;
+  // totalSqFt (shared)
+  // pricePerSqFt (shared)
+  // discountPerSqFt (shared)
+  effectivePrice?: number;
+  finalPrice?: number;
   
   // Other Product specific
   pieces?: number;
@@ -82,6 +91,7 @@ export interface Estimate {
   totalBoxes: number;
   tileTotal: number;
   graniteTotal: number;
+  spectaTotal: number;
   productTotal: number;
   cartageAmount: number;
   products: EstimateProduct[];

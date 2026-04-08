@@ -10,6 +10,10 @@ service cloud.firestore {
        return request.auth != null;
     }
 
+    function isOwner(userId) {
+       return isAuthenticated() && request.auth.uid == userId;
+    }
+
     function isAdmin() {
       return isAuthenticated() &&
         (request.auth.token.email == "golechhasanyam5@gmail.com" && request.auth.token.email_verified == true);
@@ -24,21 +28,27 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidEstimate(data) {
-      return hasRequiredFields(data, ['version', 'estimateStatus', 'products', 'grandTotal', 'createdAt', 'updatedAt']) &&
+      return hasRequiredFields(data, ['version', 'estimateStatus', 'products', 'grandTotal', 'createdAt', 'updatedAt', 'createdBy']) &&
              (!('clientName' in data) || (data.clientName is string && data.clientName.size() < 100)) &&
              (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() < 20)) &&
-             (!('assignee' in data) || (data.assignee is string)) &&
+             (!('siteAddress' in data) || (data.siteAddress is string && data.siteAddress.size() < 500)) &&
+             (!('architectName' in data) || (data.architectName is string && data.architectName.size() < 100)) &&
+             (!('assignee' in data) || (data.assignee is string && data.assignee.size() < 100)) &&
+             (!('remarks' in data) || (data.remarks is string && data.remarks.size() < 2000)) &&
              data.version is int &&
              data.estimateStatus is string &&
              data.products is list &&
-             data.grandTotal is number;
+             data.products.size() < 100 &&
+             data.grandTotal is number &&
+             data.grandTotal >= 0 &&
+             data.createdBy is string;
     }
 
     match /estimates/{estimateId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && isValidEstimate(request.resource.data);
-      allow update: if isAuthenticated() && isValidEstimate(request.resource.data);
-      allow delete: if isAdmin();
+      allow read: if isAuthenticated() && (isOwner(resource.data.createdBy) || isAdmin());
+      allow create: if isAuthenticated() && isValidEstimate(request.resource.data) && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAuthenticated() && isValidEstimate(request.resource.data) && (isOwner(resource.data.createdBy) || isAdmin()) && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if isAuthenticated() && (isOwner(resource.data.createdBy) || isAdmin());
     }
   }
 }

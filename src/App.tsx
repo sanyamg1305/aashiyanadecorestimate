@@ -281,7 +281,7 @@ function AppContent() {
       }
     } catch (error) {
       console.error('Delete failed', error);
-      alert('Failed to delete lead. Please check permissions.');
+      handleFirestoreError(error, OperationType.DELETE, `estimates/${id}`);
     }
   };
 
@@ -304,18 +304,22 @@ function AppContent() {
   // --- Calculations ---
   const totals = useMemo(() => {
     const tileTotal = products
-      .filter(p => p.type === 'tile' || p.type === 'quartz')
+      .filter(p => p.type === 'tile')
       .reduce((acc, p) => acc + p.totalPrice, 0);
     
     const graniteTotal = products
       .filter(p => p.type === 'granite')
+      .reduce((acc, p) => acc + p.totalPrice, 0);
+
+    const spectaTotal = products
+      .filter(p => p.type === 'specta')
       .reduce((acc, p) => acc + p.totalPrice, 0);
     
     const productTotal = products
       .filter(p => p.type === 'product')
       .reduce((acc, p) => acc + p.totalPrice, 0);
 
-    const subtotal = tileTotal + graniteTotal + productTotal;
+    const subtotal = tileTotal + graniteTotal + spectaTotal + productTotal;
     const totalBoxes = products.reduce((acc, p) => acc + (p.totalBoxes || 0), 0);
     
     const grandTotal = Math.round(subtotal + cartageAmount);
@@ -323,6 +327,7 @@ function AppContent() {
     return {
       tileTotal,
       graniteTotal,
+      spectaTotal,
       productTotal,
       subtotal,
       cartageAmount,
@@ -336,7 +341,7 @@ function AppContent() {
       if (p.id === id) {
         const updated = { ...p, ...updates };
         
-        if (updated.type === 'tile' || updated.type === 'quartz') {
+        if (updated.type === 'tile') {
           // Calculate Tile Area
           const length = updated.length || 0;
           const width = updated.width || 0;
@@ -358,6 +363,21 @@ function AppContent() {
           
           updated.totalPrice = (updated.sqFtRequired || 0) * (price - discount);
         } 
+        else if (updated.type === 'specta') {
+          // Slab size: 129" x 64"
+          const slabAreaSqFt = 57.3; // (129/12) * (64/12) rounded as per user example
+          updated.slabAreaSqFt = slabAreaSqFt;
+          
+          const numSlabs = updated.numberOfSlabs || 0;
+          const price = updated.pricePerSqFt || 0;
+          const discount = Math.max(0, updated.discountPerSqFt || 0); // Prevent negative discount
+          
+          updated.discountPerSqFt = discount;
+          updated.effectivePrice = price - discount;
+          updated.totalSqFt = numSlabs * slabAreaSqFt;
+          updated.totalPrice = updated.totalSqFt * updated.effectivePrice;
+          updated.finalPrice = updated.totalPrice;
+        }
         else if (updated.type === 'granite') {
           const totalSqFt = updated.totalSqFt || 0;
           const price = updated.pricePerSqFt || 0;
@@ -386,10 +406,10 @@ function AppContent() {
     }));
   };
 
-  const addTileQuartz = (type: 'tile' | 'quartz') => {
+  const addTile = () => {
     setProducts([...products, {
       id: Math.random().toString(36).substr(2, 9),
-      type,
+      type: 'tile',
       name: '',
       length: 2,
       width: 2,
@@ -400,6 +420,24 @@ function AppContent() {
       sqFtRequired: 0,
       sqFtPerBox: 0,
       totalBoxes: 0,
+      totalPrice: 0,
+    }]);
+  };
+
+  const addSpecta = () => {
+    const slabAreaSqFt = 57.3; // (129/12) * (64/12) rounded as per user example
+    setProducts([...products, {
+      id: Math.random().toString(36).substr(2, 9),
+      type: 'specta',
+      name: '',
+      spectaName: '',
+      numberOfSlabs: 0,
+      slabAreaSqFt: slabAreaSqFt,
+      totalSqFt: 0,
+      pricePerSqFt: 0,
+      discountPerSqFt: 0,
+      effectivePrice: 0,
+      finalPrice: 0,
       totalPrice: 0,
     }]);
   };
@@ -456,6 +494,7 @@ function AppContent() {
       totalBoxes: totals.totalBoxes,
       tileTotal: totals.tileTotal,
       graniteTotal: totals.graniteTotal,
+      spectaTotal: totals.spectaTotal,
       productTotal: totals.productTotal,
       cartageAmount: totals.cartageAmount,
       products,
@@ -606,7 +645,12 @@ function AppContent() {
     if (!user) return;
     
     // Fetch Estimates
-    const estimatesQuery = query(collection(db, 'estimates'), orderBy('updatedAt', 'desc'));
+    const isAdmin = user.email === 'golechhasanyam5@gmail.com';
+    const baseQuery = collection(db, 'estimates');
+    const estimatesQuery = isAdmin 
+      ? query(baseQuery, orderBy('updatedAt', 'desc'))
+      : query(baseQuery, where('createdBy', '==', user.uid), orderBy('updatedAt', 'desc'));
+
     const unsubscribeEstimates = onSnapshot(estimatesQuery, (snapshot) => {
       setEstimates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Estimate)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'estimates'));
@@ -689,13 +733,19 @@ function AppContent() {
           let rate = '';
           let productName = p.name || 'N/A';
           
-          if (p.type === 'tile' || p.type === 'quartz') {
+          if (p.type === 'tile') {
             if (p.length && p.width) {
               productName += ` (${p.length}x${p.width} ${p.unit === 'Inches' ? 'in' : 'ft'})`;
             }
             qtyInfo = `${p.sqFtRequired} sqft (${p.totalBoxes} boxes)`;
             rate = `₹${p.pricePerSqFt}/sqft`;
             if (p.discountPerSqFt) rate += ` (-₹${p.discountPerSqFt})`;
+          } else if (p.type === 'specta') {
+            productName = p.spectaName || 'Specta Slab';
+            qtyInfo = `${p.numberOfSlabs} slabs (${p.totalSqFt?.toFixed(2)} sqft)`;
+            rate = `₹${p.pricePerSqFt}/sqft`;
+            if (p.discountPerSqFt) rate += ` (-₹${p.discountPerSqFt})`;
+            if (p.effectivePrice) rate += ` (Eff: ₹${p.effectivePrice.toFixed(2)})`;
           } else if (p.type === 'granite') {
             qtyInfo = `${p.totalSqFt} sqft`;
             rate = `₹${p.pricePerSqFt}/sqft`;
@@ -723,16 +773,23 @@ function AppContent() {
 
       // Summary
       doc.setFont('helvetica', 'bold');
-      doc.text(`Subtotal: Rs. ${(estimate.subtotal || 0).toLocaleString()}`, 190, finalY, { align: 'right' });
-      doc.text(`Cartage: Rs. ${(estimate.cartageAmount || 0).toLocaleString()}`, 190, finalY + 6, { align: 'right' });
+      doc.setFontSize(10);
+      doc.text(`Tile Total: Rs. ${(estimate.tileTotal || 0).toLocaleString()}`, 190, finalY, { align: 'right' });
+      doc.text(`Granite Total: Rs. ${(estimate.graniteTotal || 0).toLocaleString()}`, 190, finalY + 6, { align: 'right' });
+      doc.text(`Specta Total: Rs. ${(estimate.spectaTotal || 0).toLocaleString()}`, 190, finalY + 12, { align: 'right' });
+      doc.text(`Product Total: Rs. ${(estimate.productTotal || 0).toLocaleString()}`, 190, finalY + 18, { align: 'right' });
+      doc.text(`Cartage: Rs. ${(estimate.cartageAmount || 0).toLocaleString()}`, 190, finalY + 24, { align: 'right' });
       doc.setFontSize(14);
-      doc.text(`Grand Total: Rs. ${(estimate.grandTotal || 0).toLocaleString()}`, 190, finalY + 14, { align: 'right' });
+      doc.setTextColor(37, 99, 235);
+      doc.text(`Grand Total: Rs. ${(estimate.grandTotal || 0).toLocaleString()}`, 190, finalY + 34, { align: 'right' });
 
       if (estimate.remarks) {
+        doc.setTextColor(30, 41, 59);
         doc.setFont('helvetica', 'normal');
-        doc.text('Remarks:', 20, finalY + 15);
+        doc.setFontSize(10);
+        doc.text('Remarks:', 20, finalY + 40);
         doc.setFontSize(9);
-        doc.text(estimate.remarks, 20, finalY + 20, { maxWidth: 170 });
+        doc.text(estimate.remarks, 20, finalY + 45, { maxWidth: 170 });
       }
 
       doc.save(`Estimate_${estimate.clientName || 'Unnamed'}_v${estimate.version || 1}.pdf`);
@@ -1091,24 +1148,27 @@ function AppContent() {
                               <td className="py-4">
                                 <span className={cn(
                                   "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
-                                  p.type === 'tile' || p.type === 'quartz' ? "bg-blue-100 text-blue-600" :
+                                  p.type === 'tile' ? "bg-blue-100 text-blue-600" :
                                   p.type === 'granite' ? "bg-purple-100 text-purple-600" :
+                                  p.type === 'specta' ? "bg-emerald-100 text-emerald-600" :
                                   "bg-black/5 text-black"
                                 )}>
                                   {p.type}
                                 </span>
                               </td>
                               <td className="py-4 text-sm font-bold text-black">
-                                {p.name}
-                                {(p.type === 'tile' || p.type === 'quartz') && p.length && p.width && (
+                                {p.type === 'specta' ? p.spectaName : p.name}
+                                {p.type === 'tile' && p.length && p.width && (
                                   <span className="ml-2 text-[10px] text-black/40 font-normal">
                                     ({p.length} x {p.width} {p.unit === 'Feet' ? 'ft' : 'in'})
                                   </span>
                                 )}
                               </td>
                               <td className="py-4 text-sm text-black/60">
-                                {p.type === 'tile' || p.type === 'quartz' ? (
+                                {p.type === 'tile' ? (
                                   <span>{p.sqFtRequired} sqft ({p.totalBoxes} boxes)</span>
+                                ) : p.type === 'specta' ? (
+                                  <span>{p.numberOfSlabs} slabs ({p.totalSqFt?.toFixed(2)} sqft)</span>
                                 ) : p.type === 'granite' ? (
                                   <span>{p.totalSqFt} sqft {p.gstApplied && <span className="text-purple-600 font-bold ml-1">+ GST</span>}</span>
                                 ) : (
@@ -1122,6 +1182,9 @@ function AppContent() {
                                   <div className="flex flex-col items-end">
                                     <span>₹{p.pricePerSqFt}/sqft</span>
                                     {p.discountPerSqFt ? <span className="text-[10px] text-red-500">-₹{p.discountPerSqFt} disc</span> : null}
+                                    {p.type === 'specta' && p.effectivePrice && (
+                                      <span className="text-[10px] text-emerald-600 font-bold">Eff: ₹{p.effectivePrice.toFixed(2)}</span>
+                                    )}
                                   </div>
                                 )}
                               </td>
@@ -1131,16 +1194,28 @@ function AppContent() {
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-black/10">
-                            <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Subtotal</td>
-                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.subtotal.toLocaleString()}</td>
+                            <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Tile Total</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.tileTotal.toLocaleString()}</td>
+                          </tr>
+                          <tr className="border-t border-black/10">
+                            <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Granite Total</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.graniteTotal.toLocaleString()}</td>
+                          </tr>
+                          <tr className="border-t border-black/10">
+                            <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Specta Total</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.spectaTotal.toLocaleString()}</td>
+                          </tr>
+                          <tr className="border-t border-black/10">
+                            <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Product Total</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.productTotal.toLocaleString()}</td>
                           </tr>
                           {selectedEstimate.cartageAmount > 0 && (
-                            <tr>
+                            <tr className="border-t border-black/10">
                               <td colSpan={4} className="py-2 text-right text-sm font-bold text-black/40">Cartage</td>
                               <td className="py-2 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.cartageAmount.toLocaleString()}</td>
                             </tr>
                           )}
-                          <tr>
+                          <tr className="border-t-2 border-black/10">
                             <td colSpan={4} className="py-4 text-right text-lg font-bold text-blue-600">Grand Total</td>
                             <td className="py-4 text-right text-xl font-bold text-blue-600 font-mono">₹{selectedEstimate.grandTotal.toLocaleString()}</td>
                           </tr>
@@ -1345,11 +1420,11 @@ function AppContent() {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <button
-                        onClick={() => addTileQuartz('tile')}
+                        onClick={addTile}
                         className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:bg-blue-50 px-3 py-2 rounded-xl transition-colors border border-blue-100"
                       >
                         <Plus size={14} />
-                        Add Tile / Quartz
+                        Add Tile
                       </button>
                       <button
                         onClick={addGranite}
@@ -1357,6 +1432,13 @@ function AppContent() {
                       >
                         <Plus size={14} />
                         Add Granite
+                      </button>
+                      <button
+                        onClick={addSpecta}
+                        className="flex items-center gap-2 text-xs font-bold text-emerald-600 hover:bg-emerald-50 px-3 py-2 rounded-xl transition-colors border border-emerald-100"
+                      >
+                        <Plus size={14} />
+                        Add Specta
                       </button>
                       <button
                         onClick={addOtherProduct}
@@ -1386,8 +1468,9 @@ function AppContent() {
                             <td className="px-6 py-4">
                               <span className={cn(
                                 "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
-                                p.type === 'tile' || p.type === 'quartz' ? "bg-blue-100 text-blue-600" :
+                                p.type === 'tile' ? "bg-blue-100 text-blue-600" :
                                 p.type === 'granite' ? "bg-purple-100 text-purple-600" :
+                                p.type === 'specta' ? "bg-emerald-100 text-emerald-600" :
                                 "bg-black/5 text-black"
                               )}>
                                 {p.type}
@@ -1395,19 +1478,8 @@ function AppContent() {
                             </td>
                             <td className="px-4 py-4">
                               <div className="space-y-2">
-                                {(p.type === 'tile' || p.type === 'quartz') && (
+                                {p.type === 'tile' && (
                                   <div className="flex flex-wrap gap-2 items-end">
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Type</label>
-                                      <select
-                                        value={p.type}
-                                        onChange={(e) => updateProduct(p.id, { type: e.target.value as any })}
-                                        className="text-xs font-bold bg-black/5 border-none rounded-lg px-2 py-1"
-                                      >
-                                        <option value="tile">Tile</option>
-                                        <option value="quartz">Quartz</option>
-                                      </select>
-                                    </div>
                                     <div className="space-y-1">
                                       <label className="text-[9px] font-bold text-black/40 uppercase">Length</label>
                                       <input
@@ -1439,17 +1511,22 @@ function AppContent() {
                                     </div>
                                   </div>
                                 )}
+                                {p.type === 'specta' && (
+                                  <div className="text-[10px] font-bold text-emerald-600 uppercase">
+                                    Premium Slab (129" x 64")
+                                  </div>
+                                )}
                                 <input
-                                  placeholder={p.type === 'granite' ? "Granite Name" : p.type === 'product' ? "Product Name" : "Tile Name"}
-                                  value={p.name}
-                                  onChange={(e) => updateProduct(p.id, { name: e.target.value })}
+                                  placeholder={p.type === 'granite' ? "Granite Name" : p.type === 'specta' ? "Specta Name" : p.type === 'product' ? "Product Name" : "Tile Name"}
+                                  value={p.type === 'specta' ? p.spectaName : p.name}
+                                  onChange={(e) => updateProduct(p.id, p.type === 'specta' ? { spectaName: e.target.value, name: e.target.value } : { name: e.target.value })}
                                   className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-black placeholder:text-black/20"
                                 />
                               </div>
                             </td>
                             <td className="px-4 py-4">
                               <div className="flex flex-wrap items-center gap-4">
-                                {(p.type === 'tile' || p.type === 'quartz') && (
+                                {p.type === 'tile' && (
                                   <>
                                     <div className="space-y-1">
                                       <label className="text-[9px] font-bold text-black/40 uppercase">SqFt Req.</label>
@@ -1473,15 +1550,23 @@ function AppContent() {
                                       <label className="text-[9px] font-bold text-black/40 uppercase">Boxes</label>
                                       <div className="text-xs font-bold text-black px-2 py-1">{p.totalBoxes}</div>
                                     </div>
+                                  </>
+                                )}
+                                {p.type === 'specta' && (
+                                  <>
                                     <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Tile Area</label>
+                                      <label className="text-[9px] font-bold text-black/40 uppercase">No. of Slabs</label>
+                                      <input
+                                        type="number"
+                                        value={p.numberOfSlabs || ''}
+                                        onChange={(e) => updateProduct(p.id, { numberOfSlabs: parseFloat(e.target.value) || 0 })}
+                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
+                                      />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
                                       <div className="text-xs font-bold text-black px-2 py-1">
-                                        {p.tileAreaSqFt?.toFixed(2)} sqft
-                                        {p.unit === 'Inches' && p.length && p.width && (
-                                          <span className="text-[8px] text-black/40 block">
-                                            ({(p.length/12).toFixed(1)} x {(p.width/12).toFixed(1)} ft)
-                                          </span>
-                                        )}
+                                        {p.totalSqFt?.toFixed(2)}
                                       </div>
                                     </div>
                                   </>
@@ -1554,6 +1639,9 @@ function AppContent() {
                                       />
                                     </div>
                                   </div>
+                                )}
+                                {p.type === 'specta' && p.effectivePrice && (
+                                  <span className="text-[9px] font-bold text-emerald-600">Eff. Rate: ₹{p.effectivePrice.toFixed(2)}</span>
                                 )}
                                 {p.gstApplied && (
                                   <span className="text-[9px] font-bold text-purple-600">GST: ₹{Math.round(p.gstAmount || 0)}</span>
@@ -1647,12 +1735,16 @@ function AppContent() {
                   <h2 className="text-xs font-bold uppercase tracking-widest text-white/40 mb-6">Summary</h2>
                   <div className="space-y-4">
                     <div className="flex justify-between items-center text-white/60">
-                      <span className="text-sm">Tile/Quartz Total</span>
+                      <span className="text-sm">Tile Total</span>
                       <span className="font-mono">₹{totals.tileTotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-white/60">
                       <span className="text-sm">Granite Total</span>
                       <span className="font-mono">₹{totals.graniteTotal.toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-white/60">
+                      <span className="text-sm">Specta Total</span>
+                      <span className="font-mono">₹{totals.spectaTotal.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between items-center text-white/60">
                       <span className="text-sm">Products Total</span>
