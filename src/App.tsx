@@ -958,7 +958,7 @@ function AppContent() {
                           </span>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <p className="text-sm font-bold text-black">₹{estimate.grandTotal.toLocaleString()}</p>
+                          <p className="text-sm font-bold text-black">₹{(estimate.grandTotal || 0).toLocaleString()}</p>
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
@@ -1054,7 +1054,7 @@ function AppContent() {
                     </div>
                     <div className="text-right">
                       <p className="text-[10px] font-bold text-black uppercase tracking-widest mb-1">Grand Total</p>
-                      <p className="text-3xl font-bold text-blue-600 font-mono">₹{selectedEstimate.grandTotal.toLocaleString()}</p>
+                      <p className="text-3xl font-bold text-blue-600 font-mono">₹{(selectedEstimate.grandTotal || 0).toLocaleString()}</p>
                     </div>
                   </div>
 
@@ -1184,36 +1184,36 @@ function AppContent() {
                                   </div>
                                 )}
                               </td>
-                              <td className="py-4 text-sm text-right font-bold text-black font-mono">₹{p.totalPrice.toLocaleString()}</td>
+                              <td className="py-4 text-sm text-right font-bold text-black font-mono">₹{(p.totalPrice || 0).toLocaleString()}</td>
                             </tr>
                           ))}
                         </tbody>
                         <tfoot>
                           <tr className="border-t-2 border-black/10">
                             <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Tile Total</td>
-                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.tileTotal.toLocaleString()}</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{(selectedEstimate.tileTotal || 0).toLocaleString()}</td>
                           </tr>
                           <tr className="border-t border-black/10">
                             <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Granite Total</td>
-                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.graniteTotal.toLocaleString()}</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{(selectedEstimate.graniteTotal || 0).toLocaleString()}</td>
                           </tr>
                           <tr className="border-t border-black/10">
                             <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Specta Total</td>
-                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.spectaTotal.toLocaleString()}</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{(selectedEstimate.spectaTotal || 0).toLocaleString()}</td>
                           </tr>
                           <tr className="border-t border-black/10">
                             <td colSpan={4} className="py-4 text-right text-sm font-bold text-black/40">Product Total</td>
-                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.productTotal.toLocaleString()}</td>
+                            <td className="py-4 text-right text-sm font-bold text-black font-mono">₹{(selectedEstimate.productTotal || 0).toLocaleString()}</td>
                           </tr>
                           {selectedEstimate.cartageAmount > 0 && (
                             <tr className="border-t border-black/10">
                               <td colSpan={4} className="py-2 text-right text-sm font-bold text-black/40">Cartage</td>
-                              <td className="py-2 text-right text-sm font-bold text-black font-mono">₹{selectedEstimate.cartageAmount.toLocaleString()}</td>
+                              <td className="py-2 text-right text-sm font-bold text-black font-mono">₹{(selectedEstimate.cartageAmount || 0).toLocaleString()}</td>
                             </tr>
                           )}
                           <tr className="border-t-2 border-black/10">
                             <td colSpan={4} className="py-4 text-right text-lg font-bold text-blue-600">Grand Total</td>
-                            <td className="py-4 text-right text-xl font-bold text-blue-600 font-mono">₹{selectedEstimate.grandTotal.toLocaleString()}</td>
+                            <td className="py-4 text-right text-xl font-bold text-blue-600 font-mono">₹{(selectedEstimate.grandTotal || 0).toLocaleString()}</td>
                           </tr>
                         </tfoot>
                       </table>
@@ -1265,12 +1265,12 @@ function AppContent() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-black/60">Amount Paid</span>
-                        <span className="text-sm font-bold text-black font-mono">₹{selectedEstimate.amountPaid.toLocaleString()}</span>
+                        <span className="text-sm font-bold text-black font-mono">₹{(selectedEstimate.amountPaid || 0).toLocaleString()}</span>
                       </div>
                       <div className="h-px bg-black/10"></div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-black/60">Balance</span>
-                        <span className="text-sm font-bold text-red-600 font-mono">₹{selectedEstimate.balanceAmount.toLocaleString()}</span>
+                        <span className="text-sm font-bold text-red-600 font-mono">₹{(selectedEstimate.balanceAmount || 0).toLocaleString()}</span>
                       </div>
                     </div>
 
@@ -1645,7 +1645,7 @@ function AppContent() {
                               </div>
                             </td>
                             <td className="px-4 py-4 text-right">
-                              <span className="text-sm font-bold text-black font-mono">₹{p.totalPrice.toLocaleString()}</span>
+                              <span className="text-sm font-bold text-black font-mono">₹{(p.totalPrice || 0).toLocaleString()}</span>
                             </td>
                             <td className="px-6 py-4">
                               <button
