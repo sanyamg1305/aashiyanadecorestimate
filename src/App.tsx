@@ -23,14 +23,13 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { 
-  collection, 
-  addDoc, 
-  updateDoc, 
-  doc, 
-  query, 
-  where, 
-  getDocs, 
-  orderBy, 
+  collection,
+  addDoc,
+  updateDoc,
+  doc,
+  query,
+  getDocs,
+  orderBy,
   serverTimestamp,
   onSnapshot,
   getDocFromServer,
@@ -645,11 +644,8 @@ function AppContent() {
     if (!user) return;
     
     // Fetch Estimates
-    const isAdmin = user.email === 'golechhasanyam5@gmail.com';
     const baseQuery = collection(db, 'estimates');
-    const estimatesQuery = isAdmin 
-      ? query(baseQuery, orderBy('updatedAt', 'desc'))
-      : query(baseQuery, where('createdBy', '==', user.uid), orderBy('updatedAt', 'desc'));
+    const estimatesQuery = query(baseQuery, orderBy('updatedAt', 'desc'));
 
     const unsubscribeEstimates = onSnapshot(estimatesQuery, (snapshot) => {
       setEstimates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Estimate)));

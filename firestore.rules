@@ -45,10 +45,10 @@ service cloud.firestore {
     }
 
     match /estimates/{estimateId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.createdBy) || isAdmin());
+      allow read: if isAuthenticated();
       allow create: if isAuthenticated() && isValidEstimate(request.resource.data) && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isAuthenticated() && isValidEstimate(request.resource.data) && (isOwner(resource.data.createdBy) || isAdmin()) && request.resource.data.createdBy == resource.data.createdBy;
-      allow delete: if isAuthenticated() && (isOwner(resource.data.createdBy) || isAdmin());
+      allow update: if isAuthenticated() && isValidEstimate(request.resource.data);
+      allow delete: if isAuthenticated();
     }
   }
 }
