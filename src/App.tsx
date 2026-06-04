@@ -872,48 +872,102 @@ function AppContent() {
         {view === 'dashboard' && (
           <div className="space-y-8">
             {/* Stats Overview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Total Estimates', value: dashboardStats.totalEstimates, color: 'blue' },
-                { label: 'Confirmed Orders', value: dashboardStats.confirmedOrders, color: 'emerald' },
-                { label: 'Pending Payments', value: dashboardStats.pendingPayments, color: 'amber' },
+                { label: 'Total', value: dashboardStats.totalEstimates, color: 'blue' },
+                { label: 'Confirmed', value: dashboardStats.confirmedOrders, color: 'emerald' },
+                { label: 'Pending', value: dashboardStats.pendingPayments, color: 'amber' },
               ].map((stat, i) => (
-                <div key={i} className="bg-white p-5 rounded-3xl border border-black shadow-sm">
-                  <p className="text-[10px] font-bold text-black uppercase tracking-widest mb-1">{stat.label}</p>
+                <div key={i} className="bg-white p-4 rounded-2xl border border-black shadow-sm">
+                  <p className="text-[9px] font-bold text-black/50 uppercase tracking-widest mb-1 truncate">{stat.label}</p>
                   <p className={cn("text-2xl font-bold", `text-${stat.color}-600`)}>{stat.value}</p>
                 </div>
               ))}
             </div>
 
             {/* Filters Row */}
-            <div className="flex flex-col md:flex-row gap-4 items-end bg-white p-6 rounded-3xl border border-black shadow-sm">
+            <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-black shadow-sm space-y-3 md:space-y-0 md:flex md:flex-row md:gap-4 md:items-end">
               <div className="flex-1 w-full">
                 <Input
-                  label="Search Estimates"
+                  label="Search"
                   icon={Search}
-                  placeholder="Client Name, Phone or Architect..."
+                  placeholder="Name, Phone or Architect..."
                   value={searchQuery}
                   onChange={(e: any) => setSearchQuery(e.target.value)}
                 />
               </div>
-              <div className="w-full md:w-48">
-                <Select
-                  label="Assignee"
-                  options={ASSIGNEES}
-                  value={assigneeFilter}
-                  onChange={(e: any) => setAssigneeFilter(e.target.value)}
-                />
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 md:w-48">
+                  <Select
+                    label="Assignee"
+                    options={ASSIGNEES}
+                    value={assigneeFilter}
+                    onChange={(e: any) => setAssigneeFilter(e.target.value)}
+                  />
+                </div>
+                <button
+                  onClick={() => { setSearchQuery(''); setAssigneeFilter(''); }}
+                  className="px-4 py-2.5 text-sm font-bold text-black hover:bg-black/5 rounded-xl transition-colors whitespace-nowrap"
+                >
+                  Reset
+                </button>
               </div>
-              <button 
-                onClick={() => { setSearchQuery(''); setAssigneeFilter(''); }}
-                className="px-4 py-2.5 text-sm font-bold text-black hover:bg-black/5 rounded-xl transition-colors"
-              >
-                Reset
-              </button>
             </div>
 
-            {/* Estimates Table */}
-            <div className="bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
+            {/* Estimates — Mobile Cards */}
+            <div className="md:hidden space-y-3">
+              {filteredEstimates.map((estimate) => (
+                <div key={estimate.id} className="bg-white rounded-2xl border border-black shadow-sm p-4" onClick={() => viewEstimateDetail(estimate)}>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <div className="font-bold text-black text-base leading-tight">{estimate.clientName || 'Unnamed'}</div>
+                      <div className="text-xs text-black/50 flex items-center gap-1 mt-0.5">
+                        <Phone size={10} /> {estimate.phoneNumber || '—'}
+                      </div>
+                    </div>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider whitespace-nowrap",
+                      ESTIMATE_STATUS_CONFIG[estimate.estimateStatus as keyof typeof ESTIMATE_STATUS_CONFIG]?.color || "bg-black/5 text-black"
+                    )}>
+                      {estimate.estimateStatus}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between mt-3">
+                    <div>
+                      <div className="text-[10px] text-black/40 uppercase tracking-widest">Assignee</div>
+                      <div className="text-sm font-bold text-black">{estimate.assignee || '—'}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] text-black/40 uppercase tracking-widest">Total</div>
+                      <div className="text-base font-bold text-blue-600">₹{(estimate.grandTotal || 0).toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5">
+                    <span className="text-[10px] text-black/30">
+                      {estimate.updatedAt ? format((estimate.updatedAt as any).toDate(), 'dd MMM yyyy') : 'Just now'}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button onClick={(e) => { e.stopPropagation(); editEstimate(estimate); }}
+                        className="p-2 text-black/40 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all">
+                        <Plus size={16} className="rotate-45" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteEstimate(estimate.id!); }}
+                        className="p-2 text-black/40 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {filteredEstimates.length === 0 && (
+                <div className="p-12 text-center bg-white rounded-2xl border border-black">
+                  <p className="text-black/40">No estimates found.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Estimates Table — Desktop */}
+            <div className="hidden md:block bg-white rounded-3xl border border-black shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
@@ -944,7 +998,7 @@ function AppContent() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
                             <div className="w-6 h-6 bg-black/5 rounded-full flex items-center justify-center text-[10px] font-bold text-black">
-                              {estimate.assignee.charAt(0)}
+                              {estimate.assignee?.charAt(0) || '?'}
                             </div>
                             <span className="text-sm text-black">{estimate.assignee}</span>
                           </div>
@@ -962,21 +1016,21 @@ function AppContent() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-center gap-2">
-                            <button 
+                            <button
                               onClick={() => viewEstimateDetail(estimate)}
                               className="p-2 text-black/40 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
                               title="View Details"
                             >
                               <FileText size={18} />
                             </button>
-                            <button 
+                            <button
                               onClick={() => editEstimate(estimate)}
                               className="p-2 text-black/40 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
                               title="Edit Estimate"
                             >
                               <Plus size={18} className="rotate-45" />
                             </button>
-                            <button 
+                            <button
                               onClick={() => deleteEstimate(estimate.id!)}
                               className="p-2 text-black/40 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
                               title="Delete Lead"
@@ -1001,34 +1055,35 @@ function AppContent() {
 
         {view === 'estimate_detail' && selectedEstimate && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <button 
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
                 onClick={() => setView('dashboard')}
                 className="flex items-center gap-2 text-sm font-bold text-black hover:text-black transition-colors"
               >
                 <ChevronRight size={18} className="rotate-180" />
                 Back to Dashboard
               </button>
-              <div className="flex items-center gap-3">
-                <button 
+              <div className="flex items-center gap-2">
+                <button
                   onClick={() => deleteEstimate(selectedEstimate.id!)}
-                  className="px-4 py-2 bg-white border border-red-200 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-3 py-2 bg-white border border-red-200 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 flex items-center justify-center gap-1.5"
                 >
-                  <Trash2 size={16} />
-                  Delete
+                  <Trash2 size={15} />
+                  <span className="hidden sm:inline">Delete</span>
                 </button>
-                <button 
+                <button
                   onClick={() => editEstimate(selectedEstimate)}
-                  className="px-4 py-2 bg-white border border-black rounded-xl text-sm font-bold text-black hover:bg-black/5"
+                  className="flex-1 sm:flex-none px-3 py-2 bg-white border border-black rounded-xl text-sm font-bold text-black hover:bg-black/5 flex items-center justify-center gap-1.5"
                 >
-                  Edit Estimate
+                  <Plus size={15} className="rotate-45" />
+                  <span>Edit</span>
                 </button>
-                <button 
+                <button
                   onClick={() => generatePDF(selectedEstimate)}
-                  className="px-4 py-2 bg-black rounded-xl text-sm font-bold text-white hover:bg-black/80 flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-3 py-2 bg-black rounded-xl text-sm font-bold text-white hover:bg-black/80 flex items-center justify-center gap-1.5"
                 >
-                  <Printer size={16} />
-                  Print PDF
+                  <Printer size={15} />
+                  <span>PDF</span>
                 </button>
               </div>
             </div>
