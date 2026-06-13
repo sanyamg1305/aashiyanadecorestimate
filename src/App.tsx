@@ -1537,30 +1537,30 @@ function AppContent() {
                           {p.type === 'tile' && (
                             <>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Length</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Length</label>
                                 <input type="number" value={p.length || ''} onChange={(e) => updateProduct(p.id, { length: parseFloat(e.target.value) || 0 })} className="w-14 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Width</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Width</label>
                                 <input type="number" value={p.width || ''} onChange={(e) => updateProduct(p.id, { width: parseFloat(e.target.value) || 0 })} className="w-14 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Unit</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Unit</label>
                                 <select value={p.unit || 'Feet'} onChange={(e) => updateProduct(p.id, { unit: e.target.value as any })} className="text-xs font-bold bg-black/5 border-none rounded-lg px-2 py-1.5">
                                   <option value="Feet">Feet</option>
                                   <option value="Inches">Inches</option>
                                 </select>
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">SqFt Req.</label>
+                                <label className="text-[9px] font-bold text-black uppercase">SqFt Req.</label>
                                 <input type="number" value={p.sqFtRequired || ''} onChange={(e) => updateProduct(p.id, { sqFtRequired: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">SqFt/Box</label>
+                                <label className="text-[9px] font-bold text-black uppercase">SqFt/Box</label>
                                 <input type="number" value={p.sqFtPerBox || ''} onChange={(e) => updateProduct(p.id, { sqFtPerBox: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Boxes</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Boxes</label>
                                 <div className="text-xs font-bold text-black bg-black/5 rounded-lg px-2 py-1.5 min-w-[2.5rem] text-center">{p.totalBoxes || 0}</div>
                               </div>
                             </>
@@ -1568,11 +1568,11 @@ function AppContent() {
                           {p.type === 'specta' && (
                             <>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">No. of Slabs</label>
+                                <label className="text-[9px] font-bold text-black uppercase">No. of Slabs</label>
                                 <input type="number" value={p.numberOfSlabs || ''} onChange={(e) => updateProduct(p.id, { numberOfSlabs: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Total SqFt</label>
                                 <div className="text-xs font-bold text-black bg-black/5 rounded-lg px-2 py-1.5">{p.totalSqFt?.toFixed(2) || '0.00'}</div>
                               </div>
                             </>
@@ -1580,7 +1580,7 @@ function AppContent() {
                           {p.type === 'granite' && (
                             <>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Total SqFt</label>
                                 <input type="number" value={p.totalSqFt || ''} onChange={(e) => updateProduct(p.id, { totalSqFt: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <label className="flex items-center gap-1.5 pb-1 cursor-pointer">
@@ -1591,7 +1591,7 @@ function AppContent() {
                           )}
                           {p.type === 'product' && (
                             <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-black/40 uppercase">Pieces</label>
+                              <label className="text-[9px] font-bold text-black uppercase">Pieces</label>
                               <input type="number" value={p.pieces || ''} onChange={(e) => updateProduct(p.id, { pieces: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                             </div>
                           )}
@@ -1599,13 +1599,13 @@ function AppContent() {
                           {/* Pricing fields */}
                           {p.type === 'product' ? (
                             <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-black/40 uppercase">Price/Pc</label>
+                              <label className="text-[9px] font-bold text-black uppercase">Price/Pc</label>
                               <input type="number" value={p.pricePerPiece || ''} onChange={(e) => updateProduct(p.id, { pricePerPiece: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                             </div>
                           ) : (
                             <>
                               <div className="space-y-1">
-                                <label className="text-[9px] font-bold text-black/40 uppercase">Price/SqFt</label>
+                                <label className="text-[9px] font-bold text-black uppercase">Price/SqFt</label>
                                 <input type="number" value={p.pricePerSqFt || ''} onChange={(e) => updateProduct(p.id, { pricePerSqFt: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
                               <div className="space-y-1">
@@ -1617,7 +1617,7 @@ function AppContent() {
 
                           {/* Total */}
                           <div className="ml-auto space-y-1 text-right">
-                            <label className="text-[9px] font-bold text-black/40 uppercase">Total</label>
+                            <label className="text-[9px] font-bold text-black uppercase">Total</label>
                             <div className="text-sm font-bold text-black font-mono">₹{(p.totalPrice || 0).toLocaleString()}</div>
                             {p.type === 'specta' && p.effectivePrice && (
                               <div className="text-[9px] font-bold text-emerald-600">Eff. ₹{p.effectivePrice.toFixed(2)}/sqft</div>
