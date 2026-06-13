@@ -50,5 +50,12 @@ service cloud.firestore {
       allow update: if isAuthenticated() && isValidEstimate(request.resource.data);
       allow delete: if isAuthenticated();
     }
+
+    match /reminders/{reminderId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.message is string && request.resource.data.message.size() < 500;
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
   }
 }
