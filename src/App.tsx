@@ -3,24 +3,27 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, Component } from 'react';
-import { 
-  Plus, 
-  Trash2, 
-  Save, 
-  Printer, 
-  Search, 
-  User, 
-  Phone, 
-  MapPin, 
-  CreditCard, 
-  FileText, 
+import React, { useState, useEffect, useMemo, useRef, Component } from 'react';
+import {
+  Plus,
+  Trash2,
+  Save,
+  Printer,
+  Search,
+  User,
+  Phone,
+  MapPin,
+  CreditCard,
+  FileText,
   ChevronRight,
   History,
   LogOut,
   Calculator,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Bell,
+  X,
+  Clock
 } from 'lucide-react';
 import { 
   collection,
@@ -43,14 +46,15 @@ import {
   User as FirebaseUser
 } from 'firebase/auth';
 import { db, auth } from './firebase';
-import { 
-  Estimate, 
-  EstimateProduct, 
-  EstimateStatus, 
-  DeliveryStatus, 
+import {
+  Estimate,
+  Reminder,
+  EstimateProduct,
+  EstimateStatus,
+  DeliveryStatus,
   PaymentStatus,
-  ASSIGNEES, 
-  PAYMENT_MODES, 
+  ASSIGNEES,
+  PAYMENT_MODES,
   ESTIMATE_STATUS_CONFIG,
   DELIVERY_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS
@@ -249,6 +253,31 @@ function AppContent() {
       totalPrice: 0,
     }
   ]);
+
+  // --- Reminders state ---
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [showReminders, setShowReminders] = useState(false);
+  const [newReminderMsg, setNewReminderMsg] = useState('');
+  const [newReminderDate, setNewReminderDate] = useState('');
+  const [newReminderClient, setNewReminderClient] = useState('');
+  const remindersRef = useRef<HTMLDivElement>(null);
+
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const dueReminders = useMemo(() =>
+    reminders.filter(r => !r.isDone && r.dueDate <= today),
+    [reminders, today]
+  );
+
+  // Close reminders panel on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (remindersRef.current && !remindersRef.current.contains(e.target as Node)) {
+        setShowReminders(false);
+      }
+    }
+    if (showReminders) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showReminders]);
 
   // --- Auth ---
   useEffect(() => {
@@ -651,10 +680,51 @@ function AppContent() {
       setEstimates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Estimate)));
     }, (error) => handleFirestoreError(error, OperationType.LIST, 'estimates'));
 
+    const remindersQuery = query(collection(db, 'reminders'), orderBy('dueDate', 'asc'));
+    const unsubscribeReminders = onSnapshot(remindersQuery, (snapshot) => {
+      setReminders(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Reminder)));
+    }, () => {});
+
     return () => {
       unsubscribeEstimates();
+      unsubscribeReminders();
     };
   }, [user]);
+
+  const addReminder = async () => {
+    if (!newReminderMsg.trim() || !newReminderDate) return;
+    try {
+      await addDoc(collection(db, 'reminders'), {
+        message: newReminderMsg.trim(),
+        dueDate: newReminderDate,
+        clientName: newReminderClient.trim(),
+        isDone: false,
+        createdBy: user?.uid || '',
+        createdAt: serverTimestamp(),
+      });
+      setNewReminderMsg('');
+      setNewReminderDate('');
+      setNewReminderClient('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'reminders');
+    }
+  };
+
+  const toggleReminderDone = async (id: string, isDone: boolean) => {
+    try {
+      await updateDoc(doc(db, 'reminders', id), { isDone: !isDone });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'reminders');
+    }
+  };
+
+  const deleteReminder = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'reminders', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'reminders');
+    }
+  };
 
   const filteredEstimates = useMemo(() => {
     return estimates.filter(e => {
@@ -858,6 +928,107 @@ function AppContent() {
               <Plus size={20} />
               <span className="text-sm hidden md:block">New Estimate</span>
             </button>
+
+            {/* Reminders Bell */}
+            <div className="relative" ref={remindersRef}>
+              <button
+                onClick={() => setShowReminders(v => !v)}
+                className={cn(
+                  "relative p-2.5 rounded-xl transition-all",
+                  showReminders ? "bg-amber-50 text-amber-600" : "text-black hover:bg-black/5"
+                )}
+              >
+                <Bell size={20} />
+                {dueReminders.length > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {dueReminders.length > 9 ? '9+' : dueReminders.length}
+                  </span>
+                )}
+              </button>
+
+              {showReminders && (
+                <div className="absolute right-0 top-12 w-80 bg-white border border-black/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between">
+                    <h3 className="font-bold text-black text-sm">Reminders</h3>
+                    <button onClick={() => setShowReminders(false)} className="p-1 hover:bg-black/5 rounded-lg transition-colors">
+                      <X size={15} className="text-black/40" />
+                    </button>
+                  </div>
+
+                  {/* Add new reminder */}
+                  <div className="p-3 border-b border-black/10 space-y-2 bg-black/[0.02]">
+                    <input
+                      placeholder="Reminder message..."
+                      value={newReminderMsg}
+                      onChange={e => setNewReminderMsg(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-black/10 rounded-xl outline-none focus:border-blue-500 text-black placeholder:text-black/30"
+                    />
+                    <input
+                      placeholder="Client name (optional)"
+                      value={newReminderClient}
+                      onChange={e => setNewReminderClient(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-black/10 rounded-xl outline-none focus:border-blue-500 text-black placeholder:text-black/30"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="date"
+                        value={newReminderDate}
+                        onChange={e => setNewReminderDate(e.target.value)}
+                        className="flex-1 px-3 py-2 text-xs bg-white border border-black/10 rounded-xl outline-none focus:border-blue-500 text-black"
+                      />
+                      <button
+                        onClick={addReminder}
+                        disabled={!newReminderMsg.trim() || !newReminderDate}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-black/10 disabled:text-black/30 text-white text-xs font-bold rounded-xl transition-colors"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Reminders list */}
+                  <div className="max-h-72 overflow-y-auto divide-y divide-black/5">
+                    {reminders.length === 0 && (
+                      <p className="text-center text-xs text-black/30 py-6">No reminders yet.</p>
+                    )}
+                    {reminders.map(r => {
+                      const isOverdue = !r.isDone && r.dueDate < today;
+                      const isDueToday = !r.isDone && r.dueDate === today;
+                      return (
+                        <div key={r.id} className={cn(
+                          "flex items-start gap-3 px-4 py-3 transition-colors",
+                          r.isDone ? "opacity-40" : isOverdue ? "bg-red-50" : isDueToday ? "bg-amber-50" : ""
+                        )}>
+                          <button
+                            onClick={() => toggleReminderDone(r.id!, r.isDone)}
+                            className={cn(
+                              "mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors",
+                              r.isDone ? "bg-emerald-500 border-emerald-500" : "border-black/20 hover:border-emerald-500"
+                            )}
+                          >
+                            {r.isDone && <CheckCircle size={10} className="text-white" />}
+                          </button>
+                          <div className="flex-1 min-w-0">
+                            <p className={cn("text-xs font-bold text-black leading-snug", r.isDone && "line-through")}>{r.message}</p>
+                            {r.clientName && <p className="text-[10px] text-black/50 mt-0.5">{r.clientName}</p>}
+                            <div className="flex items-center gap-1 mt-1">
+                              <Clock size={9} className={cn(isOverdue ? "text-red-500" : isDueToday ? "text-amber-500" : "text-black/30")} />
+                              <span className={cn("text-[10px] font-bold", isOverdue ? "text-red-500" : isDueToday ? "text-amber-500" : "text-black/40")}>
+                                {isOverdue ? "Overdue · " : isDueToday ? "Today · " : ""}{format(new Date(r.dueDate + 'T00:00:00'), 'dd MMM yyyy')}
+                              </span>
+                            </div>
+                          </div>
+                          <button onClick={() => deleteReminder(r.id!)} className="shrink-0 p-1 hover:bg-red-50 rounded-lg transition-colors">
+                            <Trash2 size={12} className="text-black/20 hover:text-red-500" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleLogout}
               className="p-2.5 text-black/40 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all ml-2"
@@ -871,6 +1042,28 @@ function AppContent() {
       <main className="max-w-5xl mx-auto px-4 pt-6">
         {view === 'dashboard' && (
           <div className="space-y-8">
+            {/* Overdue Reminders Alert */}
+            {dueReminders.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 flex items-start gap-3">
+                <Bell size={18} className="text-red-500 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-red-700">
+                    {dueReminders.length} reminder{dueReminders.length > 1 ? 's' : ''} due
+                  </p>
+                  <p className="text-xs text-red-500 mt-0.5 truncate">
+                    {dueReminders[0].message}{dueReminders[0].clientName ? ` · ${dueReminders[0].clientName}` : ''}
+                    {dueReminders.length > 1 ? ` +${dueReminders.length - 1} more` : ''}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowReminders(true)}
+                  className="shrink-0 text-xs font-bold text-red-600 hover:text-red-800 underline underline-offset-2"
+                >
+                  View
+                </button>
+              </div>
+            )}
+
             {/* Stats Overview */}
             <div className="grid grid-cols-3 gap-3">
               {[

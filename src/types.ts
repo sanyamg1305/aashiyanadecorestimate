@@ -103,6 +103,17 @@ export interface Estimate {
   createdBy: string;
 }
 
+export interface Reminder {
+  id?: string;
+  message: string;
+  dueDate: string; // ISO date string YYYY-MM-DD
+  clientName?: string;
+  estimateId?: string;
+  isDone: boolean;
+  createdBy: string;
+  createdAt: any;
+}
+
 export const ASSIGNEES = [
   'Raj', 'Anil', 'Pinkey', 'Hema', 'Ranjendra', 'Bharat', 'Indresh'
 ];
