@@ -1311,7 +1311,7 @@ function AppContent() {
                         <span className="text-xs text-black/60">Payment Status</span>
                         <span className={cn(
                           "text-xs font-bold px-2 py-0.5 rounded-full",
-                          selectedEstimate.paymentStatus === 'Paid' ? "bg-emerald-100 text-emerald-700" :
+                          selectedEstimate.paymentStatus === 'Fully Paid' ? "bg-emerald-100 text-emerald-700" :
                           selectedEstimate.paymentStatus === 'Partially Paid' ? "bg-amber-100 text-amber-700" :
                           "bg-black/10 text-black/60"
                         )}>
@@ -1461,7 +1461,7 @@ function AppContent() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                 {/* Products Section */}
-                <section className="bg-white rounded-3xl p-6 shadow-sm border border-black overflow-hidden">
+                <section className="bg-white rounded-3xl p-6 shadow-sm border border-black">
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
@@ -1501,219 +1501,137 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto -mx-6">
-                    <table className="w-full min-w-[1000px] border-collapse">
-                      <thead>
-                        <tr className="bg-black/5 border-y border-black/10">
-                          <th className="px-6 py-3 text-left text-[10px] font-bold text-black/40 uppercase tracking-widest w-16">Type</th>
-                          <th className="px-4 py-3 text-left text-[10px] font-bold text-black/40 uppercase tracking-widest">Product Details</th>
-                          <th className="px-4 py-3 text-left text-[10px] font-bold text-black/40 uppercase tracking-widest">Qty / Info</th>
-                          <th className="px-4 py-3 text-right text-[10px] font-bold text-black/40 uppercase tracking-widest">Rate</th>
-                          <th className="px-4 py-3 text-right text-[10px] font-bold text-black/40 uppercase tracking-widest">Total</th>
-                          <th className="px-6 py-3 w-10"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-black/10">
-                        {products.map((p) => (
-                          <tr key={p.id} className="group hover:bg-black/5 transition-colors">
-                            <td className="px-6 py-4">
-                              <span className={cn(
-                                "px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
-                                p.type === 'tile' ? "bg-blue-100 text-blue-600" :
-                                p.type === 'granite' ? "bg-purple-100 text-purple-600" :
-                                p.type === 'specta' ? "bg-emerald-100 text-emerald-600" :
-                                "bg-black/5 text-black"
-                              )}>
-                                {p.type}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="space-y-2">
-                                {p.type === 'tile' && (
-                                  <div className="flex flex-wrap gap-2 items-end">
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Length</label>
-                                      <input
-                                        type="number"
-                                        value={p.length || ''}
-                                        onChange={(e) => updateProduct(p.id, { length: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Width</label>
-                                      <input
-                                        type="number"
-                                        value={p.width || ''}
-                                        onChange={(e) => updateProduct(p.id, { width: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Unit</label>
-                                      <select
-                                        value={p.unit || 'Feet'}
-                                        onChange={(e) => updateProduct(p.id, { unit: e.target.value as any })}
-                                        className="text-xs font-bold bg-black/5 border-none rounded-lg px-2 py-1"
-                                      >
-                                        <option value="Feet">Feet</option>
-                                        <option value="Inches">Inches</option>
-                                      </select>
-                                    </div>
-                                  </div>
-                                )}
-                                {p.type === 'specta' && (
-                                  <div className="text-[10px] font-bold text-emerald-600 uppercase">
-                                    Premium Slab (129" x 64")
-                                  </div>
-                                )}
-                                <input
-                                  placeholder={p.type === 'granite' ? "Granite Name" : p.type === 'specta' ? "Specta Name" : p.type === 'product' ? "Product Name" : "Tile Name"}
-                                  value={p.type === 'specta' ? p.spectaName : p.name}
-                                  onChange={(e) => updateProduct(p.id, p.type === 'specta' ? { spectaName: e.target.value, name: e.target.value } : { name: e.target.value })}
-                                  className="w-full bg-transparent border-none focus:ring-0 text-sm font-bold text-black placeholder:text-black/20"
-                                />
+                  <div className="space-y-3 mt-2">
+                    {products.map((p) => (
+                      <div key={p.id} className="border border-black/10 rounded-2xl p-4 space-y-3 hover:border-black/20 transition-colors">
+                        {/* Row 1: Type badge + Name + Delete */}
+                        <div className="flex items-center gap-3">
+                          <span className={cn(
+                            "shrink-0 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider",
+                            p.type === 'tile' ? "bg-blue-100 text-blue-600" :
+                            p.type === 'granite' ? "bg-purple-100 text-purple-600" :
+                            p.type === 'specta' ? "bg-emerald-100 text-emerald-600" :
+                            "bg-black/5 text-black"
+                          )}>
+                            {p.type}
+                          </span>
+                          {p.type === 'specta' && (
+                            <span className="text-[10px] font-bold text-emerald-600 uppercase shrink-0">129" × 64"</span>
+                          )}
+                          <input
+                            placeholder={p.type === 'granite' ? "Granite Name" : p.type === 'specta' ? "Specta Name" : p.type === 'product' ? "Product Name" : "Tile Name"}
+                            value={p.type === 'specta' ? (p.spectaName || '') : (p.name || '')}
+                            onChange={(e) => updateProduct(p.id, p.type === 'specta' ? { spectaName: e.target.value, name: e.target.value } : { name: e.target.value })}
+                            className="flex-1 min-w-0 bg-transparent border-none focus:ring-0 text-sm font-bold text-black placeholder:text-black/20 outline-none"
+                          />
+                          <button
+                            onClick={() => removeProduct(p.id)}
+                            className="shrink-0 p-1.5 text-black/20 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+
+                        {/* Row 2: Fields */}
+                        <div className="flex flex-wrap gap-3 items-end">
+                          {p.type === 'tile' && (
+                            <>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Length</label>
+                                <input type="number" value={p.length || ''} onChange={(e) => updateProduct(p.id, { length: parseFloat(e.target.value) || 0 })} className="w-14 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="flex flex-wrap items-center gap-4">
-                                {p.type === 'tile' && (
-                                  <>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">SqFt Req.</label>
-                                      <input
-                                        type="number"
-                                        value={p.sqFtRequired || ''}
-                                        onChange={(e) => updateProduct(p.id, { sqFtRequired: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">SqFt/Box</label>
-                                      <input
-                                        type="number"
-                                        value={p.sqFtPerBox || ''}
-                                        onChange={(e) => updateProduct(p.id, { sqFtPerBox: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Boxes</label>
-                                      <div className="text-xs font-bold text-black px-2 py-1">{p.totalBoxes}</div>
-                                    </div>
-                                  </>
-                                )}
-                                {p.type === 'specta' && (
-                                  <>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">No. of Slabs</label>
-                                      <input
-                                        type="number"
-                                        value={p.numberOfSlabs || ''}
-                                        onChange={(e) => updateProduct(p.id, { numberOfSlabs: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
-                                      <div className="text-xs font-bold text-black px-2 py-1">
-                                        {p.totalSqFt?.toFixed(2)}
-                                      </div>
-                                    </div>
-                                  </>
-                                )}
-                                {p.type === 'granite' && (
-                                  <>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
-                                      <input
-                                        type="number"
-                                        value={p.totalSqFt || ''}
-                                        onChange={(e) => updateProduct(p.id, { totalSqFt: parseFloat(e.target.value) || 0 })}
-                                        className="w-20 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                      />
-                                    </div>
-                                    <div className="flex items-center gap-2 pt-4">
-                                      <input
-                                        type="checkbox"
-                                        checked={p.gstApplied}
-                                        onChange={(e) => updateProduct(p.id, { gstApplied: e.target.checked })}
-                                        className="rounded border-slate-300 text-purple-600 focus:ring-purple-500"
-                                      />
-                                      <label className="text-[10px] font-bold text-purple-600 uppercase">Add GST (18%)</label>
-                                    </div>
-                                  </>
-                                )}
-                                {p.type === 'product' && (
-                                  <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-black/40 uppercase">Pieces</label>
-                                    <input
-                                      type="number"
-                                      value={p.pieces || ''}
-                                      onChange={(e) => updateProduct(p.id, { pieces: parseFloat(e.target.value) || 0 })}
-                                      className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-black"
-                                    />
-                                  </div>
-                                )}
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Width</label>
+                                <input type="number" value={p.width || ''} onChange={(e) => updateProduct(p.id, { width: parseFloat(e.target.value) || 0 })} className="w-14 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
                               </div>
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <div className="flex flex-col items-end gap-2">
-                                {p.type === 'product' ? (
-                                  <div className="space-y-1">
-                                    <label className="text-[9px] font-bold text-black/40 uppercase">Price/Pc</label>
-                                    <input
-                                      type="number"
-                                      value={p.pricePerPiece || ''}
-                                      onChange={(e) => updateProduct(p.id, { pricePerPiece: parseFloat(e.target.value) || 0 })}
-                                      className="w-20 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-right text-black"
-                                    />
-                                  </div>
-                                ) : (
-                                  <div className="flex gap-4">
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Price/SqFt</label>
-                                      <input
-                                        type="number"
-                                        value={p.pricePerSqFt || ''}
-                                        onChange={(e) => updateProduct(p.id, { pricePerSqFt: parseFloat(e.target.value) || 0 })}
-                                        className="w-20 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-right text-black"
-                                      />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[9px] font-bold text-black/40 uppercase">Disc/SqFt</label>
-                                      <input
-                                        type="number"
-                                        value={p.discountPerSqFt || ''}
-                                        onChange={(e) => updateProduct(p.id, { discountPerSqFt: parseFloat(e.target.value) || 0 })}
-                                        className="w-16 bg-black/5 rounded-lg px-2 py-1 text-xs font-bold text-right text-red-500"
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                                {p.type === 'specta' && p.effectivePrice && (
-                                  <span className="text-[9px] font-bold text-emerald-600">Eff. Rate: ₹{p.effectivePrice.toFixed(2)}</span>
-                                )}
-                                {p.gstApplied && (
-                                  <span className="text-[9px] font-bold text-purple-600">GST: ₹{Math.round(p.gstAmount || 0)}</span>
-                                )}
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Unit</label>
+                                <select value={p.unit || 'Feet'} onChange={(e) => updateProduct(p.id, { unit: e.target.value as any })} className="text-xs font-bold bg-black/5 border-none rounded-lg px-2 py-1.5">
+                                  <option value="Feet">Feet</option>
+                                  <option value="Inches">Inches</option>
+                                </select>
                               </div>
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                              <span className="text-sm font-bold text-black font-mono">₹{(p.totalPrice || 0).toLocaleString()}</span>
-                            </td>
-                            <td className="px-6 py-4">
-                              <button
-                                onClick={() => removeProduct(p.id)}
-                                className="p-1.5 text-black/20 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">SqFt Req.</label>
+                                <input type="number" value={p.sqFtRequired || ''} onChange={(e) => updateProduct(p.id, { sqFtRequired: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">SqFt/Box</label>
+                                <input type="number" value={p.sqFtPerBox || ''} onChange={(e) => updateProduct(p.id, { sqFtPerBox: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Boxes</label>
+                                <div className="text-xs font-bold text-black bg-black/5 rounded-lg px-2 py-1.5 min-w-[2.5rem] text-center">{p.totalBoxes || 0}</div>
+                              </div>
+                            </>
+                          )}
+                          {p.type === 'specta' && (
+                            <>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">No. of Slabs</label>
+                                <input type="number" value={p.numberOfSlabs || ''} onChange={(e) => updateProduct(p.id, { numberOfSlabs: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
+                                <div className="text-xs font-bold text-black bg-black/5 rounded-lg px-2 py-1.5">{p.totalSqFt?.toFixed(2) || '0.00'}</div>
+                              </div>
+                            </>
+                          )}
+                          {p.type === 'granite' && (
+                            <>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Total SqFt</label>
+                                <input type="number" value={p.totalSqFt || ''} onChange={(e) => updateProduct(p.id, { totalSqFt: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                              </div>
+                              <label className="flex items-center gap-1.5 pb-1 cursor-pointer">
+                                <input type="checkbox" checked={p.gstApplied} onChange={(e) => updateProduct(p.id, { gstApplied: e.target.checked })} className="rounded border-slate-300 text-purple-600 focus:ring-purple-500" />
+                                <span className="text-[10px] font-bold text-purple-600 uppercase">GST 18%</span>
+                              </label>
+                            </>
+                          )}
+                          {p.type === 'product' && (
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-black/40 uppercase">Pieces</label>
+                              <input type="number" value={p.pieces || ''} onChange={(e) => updateProduct(p.id, { pieces: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                            </div>
+                          )}
+
+                          {/* Pricing fields */}
+                          {p.type === 'product' ? (
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-bold text-black/40 uppercase">Price/Pc</label>
+                              <input type="number" value={p.pricePerPiece || ''} onChange={(e) => updateProduct(p.id, { pricePerPiece: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                            </div>
+                          ) : (
+                            <>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-black/40 uppercase">Price/SqFt</label>
+                                <input type="number" value={p.pricePerSqFt || ''} onChange={(e) => updateProduct(p.id, { pricePerSqFt: parseFloat(e.target.value) || 0 })} className="w-20 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-black" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[9px] font-bold text-red-400 uppercase">Disc/SqFt</label>
+                                <input type="number" value={p.discountPerSqFt || ''} onChange={(e) => updateProduct(p.id, { discountPerSqFt: parseFloat(e.target.value) || 0 })} className="w-16 bg-black/5 rounded-lg px-2 py-1.5 text-xs font-bold text-red-500" />
+                              </div>
+                            </>
+                          )}
+
+                          {/* Total */}
+                          <div className="ml-auto space-y-1 text-right">
+                            <label className="text-[9px] font-bold text-black/40 uppercase">Total</label>
+                            <div className="text-sm font-bold text-black font-mono">₹{(p.totalPrice || 0).toLocaleString()}</div>
+                            {p.type === 'specta' && p.effectivePrice && (
+                              <div className="text-[9px] font-bold text-emerald-600">Eff. ₹{p.effectivePrice.toFixed(2)}/sqft</div>
+                            )}
+                            {p.gstApplied && (
+                              <div className="text-[9px] font-bold text-purple-600">GST ₹{Math.round(p.gstAmount || 0)}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {products.length === 0 && (
+                      <div className="py-8 text-center text-sm text-black/30">No items yet. Use the buttons above to add products.</div>
+                    )}
                   </div>
                 </section>
 
