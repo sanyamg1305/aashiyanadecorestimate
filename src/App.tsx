@@ -23,7 +23,12 @@ import {
   CheckCircle,
   Bell,
   X,
-  Clock
+  Clock,
+  MessageSquare,
+  Send,
+  TrendingUp,
+  AlertTriangle,
+  Calendar
 } from 'lucide-react';
 import { 
   collection,
@@ -49,13 +54,16 @@ import { db, auth } from './firebase';
 import {
   Estimate,
   Reminder,
+  EstimateNote,
   EstimateProduct,
   EstimateStatus,
   DeliveryStatus,
   PaymentStatus,
+  FollowUpStatus,
   ASSIGNEES,
   PAYMENT_MODES,
   ESTIMATE_STATUS_CONFIG,
+  FOLLOW_UP_STATUS_CONFIG,
   DELIVERY_STATUS_OPTIONS,
   PAYMENT_STATUS_OPTIONS
 } from './types';
@@ -237,6 +245,14 @@ function AppContent() {
   const [deliveryStatus, setDeliveryStatus] = useState<DeliveryStatus>('Preparing Order');
   const [isFinalOrder, setIsFinalOrder] = useState(false);
   const [cartageAmount, setCartageAmount] = useState(0);
+  const [validUntil, setValidUntil] = useState('');
+  const [followUpStatus, setFollowUpStatus] = useState<FollowUpStatus>('Not Contacted');
+
+  // Notes state
+  const [notes, setNotes] = useState<EstimateNote[]>([]);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [isAddingNote, setIsAddingNote] = useState(false);
+
   const [products, setProducts] = useState<EstimateProduct[]>([
     {
       id: Math.random().toString(36).substr(2, 9),
@@ -532,6 +548,8 @@ function AppContent() {
       expectedDeliveryDate: expectedDeliveryDate || null,
       deliveryStatus: deliveryStatus || 'Preparing Order',
       isFinalOrder: isFinalOrder || false,
+      validUntil: validUntil || null,
+      followUpStatus: followUpStatus || 'Not Contacted',
     };
 
     if (!currentEstimateId) {
@@ -580,6 +598,8 @@ function AppContent() {
     setDeliveryStatus('Preparing Order');
     setIsFinalOrder(false);
     setCartageAmount(0);
+    setValidUntil('');
+    setFollowUpStatus('Not Contacted');
     
     setProducts([{
       id: Math.random().toString(36).substr(2, 9),
@@ -641,6 +661,14 @@ function AppContent() {
     }
   };
 
+  const updateFollowUpStatus = async (estimateId: string, status: FollowUpStatus) => {
+    try {
+      await updateDoc(doc(db, 'estimates', estimateId), { followUpStatus: status, updatedAt: serverTimestamp() });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'estimates');
+    }
+  };
+
   const viewEstimateDetail = (estimate: Estimate) => {
     setSelectedEstimateId(estimate.id!);
     setView('estimate_detail');
@@ -664,6 +692,8 @@ function AppContent() {
     setDeliveryStatus(estimate.deliveryStatus || 'Preparing Order');
     setIsFinalOrder(estimate.isFinalOrder || false);
     setCartageAmount(estimate.cartageAmount || 0);
+    setValidUntil(estimate.validUntil || '');
+    setFollowUpStatus(estimate.followUpStatus || 'Not Contacted');
     setProducts(estimate.products);
     setView('estimate_form');
   };
@@ -690,6 +720,36 @@ function AppContent() {
       unsubscribeReminders();
     };
   }, [user]);
+
+  // Notes listener — re-subscribes whenever the selected estimate changes
+  useEffect(() => {
+    if (!selectedEstimateId) { setNotes([]); return; }
+    const notesQuery = query(
+      collection(db, 'estimates', selectedEstimateId, 'notes'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsub = onSnapshot(notesQuery, (snap) => {
+      setNotes(snap.docs.map(d => ({ id: d.id, ...d.data() } as EstimateNote)));
+    }, () => {});
+    return unsub;
+  }, [selectedEstimateId]);
+
+  const addNote = async () => {
+    if (!newNoteText.trim() || !selectedEstimateId || !user) return;
+    setIsAddingNote(true);
+    try {
+      await addDoc(collection(db, 'estimates', selectedEstimateId, 'notes'), {
+        text: newNoteText.trim(),
+        userName: user.displayName || user.email || 'Unknown',
+        createdAt: serverTimestamp(),
+      });
+      setNewNoteText('');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'notes');
+    } finally {
+      setIsAddingNote(false);
+    }
+  };
 
   const addReminder = async () => {
     if (!newReminderMsg.trim() || !newReminderDate) return;
@@ -739,7 +799,7 @@ function AppContent() {
     });
   }, [estimates, searchQuery, assigneeFilter]);
 
-  const selectedEstimate = useMemo(() => 
+  const selectedEstimate = useMemo(() =>
     estimates.find(e => e.id === selectedEstimateId) || null
   , [estimates, selectedEstimateId]);
 
@@ -747,9 +807,44 @@ function AppContent() {
     const totalEstimates = estimates.length;
     const confirmedOrders = estimates.filter(e => e.estimateStatus === 'Order Confirmed').length;
     const pendingPayments = estimates.filter(e => e.paymentStatus === 'Not Paid' || e.paymentStatus === 'Partially Paid').length;
-    
     return { totalEstimates, confirmedOrders, pendingPayments };
   }, [estimates]);
+
+  // Monthly revenue for last 6 months (confirmed orders)
+  const monthlyRevenue = useMemo(() => {
+    const months: { label: string; key: string; total: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      months.push({
+        label: format(d, 'MMM'),
+        key: format(d, 'yyyy-MM'),
+        total: 0,
+      });
+    }
+    estimates.forEach(e => {
+      if (e.estimateStatus !== 'Order Confirmed') return;
+      const ts = e.updatedAt?.toDate ? e.updatedAt.toDate() : null;
+      if (!ts) return;
+      const key = format(ts, 'yyyy-MM');
+      const bucket = months.find(m => m.key === key);
+      if (bucket) bucket.total += e.grandTotal || 0;
+    });
+    return months;
+  }, [estimates]);
+
+  const maxMonthRevenue = useMemo(() =>
+    Math.max(1, ...monthlyRevenue.map(m => m.total)),
+    [monthlyRevenue]
+  );
+
+  // Duplicate phone detection
+  const duplicatePhoneEstimates = useMemo(() => {
+    if (!phoneNumber || phoneNumber.length < 6) return [];
+    return estimates.filter(
+      e => e.phoneNumber === phoneNumber && e.id !== currentEstimateId
+    );
+  }, [phoneNumber, estimates, currentEstimateId]);
 
   // --- PDF Export ---
   const generatePDF = (estimate: Estimate) => {
@@ -1078,6 +1173,30 @@ function AppContent() {
               ))}
             </div>
 
+            {/* Monthly Revenue Chart */}
+            <div className="bg-white rounded-2xl border border-black shadow-sm p-5">
+              <div className="flex items-center gap-2 mb-4">
+                <TrendingUp size={16} className="text-blue-600" />
+                <h3 className="text-xs font-bold text-black uppercase tracking-widest">Confirmed Revenue — Last 6 Months</h3>
+              </div>
+              <div className="flex items-end gap-2 h-24">
+                {monthlyRevenue.map(m => (
+                  <div key={m.key} className="flex-1 flex flex-col items-center gap-1">
+                    <span className="text-[9px] font-bold text-black/40">
+                      {m.total > 0 ? `₹${Math.round(m.total / 1000)}k` : ''}
+                    </span>
+                    <div className="w-full rounded-t-lg bg-blue-600/10 flex items-end overflow-hidden" style={{ height: '60px' }}>
+                      <div
+                        className="w-full bg-blue-600 rounded-t-lg transition-all duration-500"
+                        style={{ height: `${Math.max(3, (m.total / maxMonthRevenue) * 60)}px` }}
+                      />
+                    </div>
+                    <span className="text-[9px] font-bold text-black/50">{m.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             {/* Filters Row */}
             <div className="bg-white p-4 md:p-6 rounded-2xl md:rounded-3xl border border-black shadow-sm space-y-3 md:space-y-0 md:flex md:flex-row md:gap-4 md:items-end">
               <div className="flex-1 w-full">
@@ -1136,9 +1255,19 @@ function AppContent() {
                     </div>
                   </div>
                   <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5">
-                    <span className="text-[10px] text-black/30">
-                      {estimate.updatedAt ? format((estimate.updatedAt as any).toDate(), 'dd MMM yyyy') : 'Just now'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-black/30">
+                        {estimate.updatedAt ? format((estimate.updatedAt as any).toDate(), 'dd MMM yyyy') : 'Just now'}
+                      </span>
+                      {estimate.followUpStatus && estimate.followUpStatus !== 'Not Contacted' && (
+                        <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", FOLLOW_UP_STATUS_CONFIG[estimate.followUpStatus])}>
+                          {estimate.followUpStatus}
+                        </span>
+                      )}
+                      {estimate.validUntil && estimate.validUntil < today && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">Expired</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1">
                       <button onClick={(e) => { e.stopPropagation(); editEstimate(estimate); }}
                         className="p-2 text-black/40 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all">
@@ -1197,12 +1326,22 @@ function AppContent() {
                           </div>
                         </td>
                         <td className="px-6 py-4 text-center">
-                          <span className={cn(
-                            "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                            ESTIMATE_STATUS_CONFIG[estimate.estimateStatus as keyof typeof ESTIMATE_STATUS_CONFIG]?.color || "bg-black/5 text-black"
-                          )}>
-                            {estimate.estimateStatus}
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className={cn(
+                              "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                              ESTIMATE_STATUS_CONFIG[estimate.estimateStatus as keyof typeof ESTIMATE_STATUS_CONFIG]?.color || "bg-black/5 text-black"
+                            )}>
+                              {estimate.estimateStatus}
+                            </span>
+                            {estimate.followUpStatus && estimate.followUpStatus !== 'Not Contacted' && (
+                              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-full", FOLLOW_UP_STATUS_CONFIG[estimate.followUpStatus])}>
+                                {estimate.followUpStatus}
+                              </span>
+                            )}
+                            {estimate.validUntil && estimate.validUntil < today && (
+                              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-600">Expired</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-6 py-4 text-center">
                           <p className="text-sm font-bold text-black">₹{(estimate.grandTotal || 0).toLocaleString()}</p>
@@ -1287,7 +1426,7 @@ function AppContent() {
                 <div className="bg-white rounded-3xl p-8 border border-black shadow-sm">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
                         <h2 className="text-2xl font-bold text-black">Estimate v{selectedEstimate.version || 1}</h2>
                         <span className={cn(
                           "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider",
@@ -1295,6 +1434,11 @@ function AppContent() {
                         )}>
                           {selectedEstimate.estimateStatus}
                         </span>
+                        {selectedEstimate.validUntil && selectedEstimate.validUntil < today && (
+                          <span className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600">
+                            <AlertTriangle size={11} /> Expired
+                          </span>
+                        )}
                       </div>
                       <p className="text-black/60 text-sm">
                         Created on {selectedEstimate.createdAt ? format((selectedEstimate.createdAt as any).toDate(), 'dd MMM yyyy, HH:mm') : 'Just now'}
@@ -1475,6 +1619,52 @@ function AppContent() {
                     <p className="text-sm text-black/60 leading-relaxed">{selectedEstimate.remarks}</p>
                   </div>
                 )}
+
+                {/* Notes / Activity Log */}
+                <div className="bg-white rounded-3xl p-6 border border-black shadow-sm">
+                  <h4 className="text-[10px] font-bold text-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <MessageSquare size={13} />
+                    Notes & Activity
+                  </h4>
+
+                  {/* Add note input */}
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      placeholder="Add a note... (e.g. Called, visited showroom)"
+                      value={newNoteText}
+                      onChange={e => setNewNoteText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && addNote()}
+                      className="flex-1 min-w-0 px-3 py-2 text-sm bg-black/5 border border-black/10 rounded-xl outline-none focus:border-blue-500 text-black placeholder:text-black/30"
+                    />
+                    <button
+                      onClick={addNote}
+                      disabled={isAddingNote || !newNoteText.trim()}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-black/10 disabled:text-black/30 text-white rounded-xl transition-colors"
+                    >
+                      <Send size={14} />
+                    </button>
+                  </div>
+
+                  {/* Notes list */}
+                  <div className="space-y-3 max-h-64 overflow-y-auto">
+                    {notes.length === 0 && (
+                      <p className="text-xs text-black/30 text-center py-4">No notes yet.</p>
+                    )}
+                    {notes.map(n => (
+                      <div key={n.id} className="flex gap-3">
+                        <div className="w-6 h-6 shrink-0 bg-blue-100 rounded-full flex items-center justify-center text-[9px] font-bold text-blue-600">
+                          {(n.userName || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-black leading-snug">{n.text}</p>
+                          <p className="text-[10px] text-black/40 mt-0.5">
+                            {n.userName} · {n.createdAt?.toDate ? format(n.createdAt.toDate(), 'dd MMM yyyy, HH:mm') : 'Just now'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-6">
@@ -1538,6 +1728,40 @@ function AppContent() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {/* Follow-up Status Card */}
+                <div className="bg-white rounded-3xl p-6 border border-black shadow-sm">
+                  <h3 className="font-bold text-black mb-4 flex items-center gap-2">
+                    <Phone size={16} className="text-black/40" />
+                    Follow-up Status
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(Object.keys(FOLLOW_UP_STATUS_CONFIG) as FollowUpStatus[]).map(s => (
+                      <button
+                        key={s}
+                        onClick={() => updateFollowUpStatus(selectedEstimate.id!, s)}
+                        className={cn(
+                          "text-[10px] font-bold px-2 py-2 rounded-xl border-2 transition-all text-left",
+                          (selectedEstimate.followUpStatus || 'Not Contacted') === s
+                            ? cn(FOLLOW_UP_STATUS_CONFIG[s], 'border-current')
+                            : 'border-transparent text-black/40 hover:bg-black/5'
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  {selectedEstimate.validUntil && (
+                    <p className={cn(
+                      "mt-3 text-xs font-bold flex items-center gap-1",
+                      selectedEstimate.validUntil < today ? "text-red-600" : "text-black/40"
+                    )}>
+                      <Calendar size={11} />
+                      Valid until {format(new Date(selectedEstimate.validUntil + 'T00:00:00'), 'dd MMM yyyy')}
+                      {selectedEstimate.validUntil < today && ' · Expired'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Actions Card */}
@@ -1618,14 +1842,29 @@ function AppContent() {
                   value={clientName}
                   onChange={(e: any) => setClientName(e.target.value)}
                 />
-                <Input
-                  label="Phone Number"
-                  icon={Phone}
-                  type="tel"
-                  placeholder="10-digit mobile"
-                  value={phoneNumber}
-                  onChange={(e: any) => setPhoneNumber(e.target.value)}
-                />
+                <div className="space-y-1">
+                  <Input
+                    label="Phone Number"
+                    icon={Phone}
+                    type="tel"
+                    placeholder="10-digit mobile"
+                    value={phoneNumber}
+                    onChange={(e: any) => setPhoneNumber(e.target.value)}
+                  />
+                  {duplicatePhoneEstimates.length > 0 && (
+                    <div className="flex items-start gap-2 p-2 bg-amber-50 border border-amber-200 rounded-xl mt-1">
+                      <AlertTriangle size={13} className="text-amber-600 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-amber-700">Duplicate phone number</p>
+                        {duplicatePhoneEstimates.slice(0, 2).map(e => (
+                          <p key={e.id} className="text-[10px] text-amber-600">
+                            {e.clientName} — {e.estimateStatus}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <Input
                   label="Architect Name"
                   icon={User}
@@ -1890,6 +2129,41 @@ function AppContent() {
                       value={amountPaid}
                       onChange={(e: any) => setAmountPaid(parseFloat(e.target.value) || 0)}
                     />
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold text-black uppercase tracking-wider flex items-center gap-1.5">
+                        <Calendar size={14} />
+                        Valid Until (Expiry)
+                      </label>
+                      <input
+                        type="date"
+                        value={validUntil}
+                        onChange={e => setValidUntil(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-white border border-black rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-black"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-black uppercase tracking-wider flex items-center gap-1.5">
+                        <Phone size={14} />
+                        Follow-up Status
+                      </label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {(Object.keys(FOLLOW_UP_STATUS_CONFIG) as FollowUpStatus[]).map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setFollowUpStatus(s)}
+                            className={cn(
+                              "text-[10px] font-bold px-2 py-1.5 rounded-xl border-2 transition-all text-left",
+                              followUpStatus === s
+                                ? cn(FOLLOW_UP_STATUS_CONFIG[s], 'border-current')
+                                : 'border-transparent text-black/40 hover:bg-black/5'
+                            )}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </section>
 

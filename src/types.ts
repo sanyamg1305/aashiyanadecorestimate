@@ -101,6 +101,32 @@ export interface Estimate {
   deliveryStatus?: DeliveryStatus;
   isFinalOrder?: boolean;
   createdBy: string;
+  followUpStatus?: FollowUpStatus;
+  validUntil?: string;
+}
+
+export type FollowUpStatus =
+  | 'Not Contacted'
+  | 'Call Scheduled'
+  | 'Client Visited'
+  | 'No Response'
+  | 'Interested'
+  | 'Not Interested';
+
+export const FOLLOW_UP_STATUS_CONFIG: Record<FollowUpStatus, string> = {
+  'Not Contacted':  'bg-black/5 text-black/50',
+  'Call Scheduled': 'bg-blue-100 text-blue-700',
+  'Client Visited': 'bg-purple-100 text-purple-700',
+  'No Response':    'bg-red-100 text-red-700',
+  'Interested':     'bg-emerald-100 text-emerald-700',
+  'Not Interested': 'bg-slate-100 text-slate-500',
+};
+
+export interface EstimateNote {
+  id?: string;
+  text: string;
+  userName: string;
+  createdAt: any;
 }
 
 export interface Reminder {
